@@ -31,8 +31,15 @@ Hands on:
 		- TP: 1) every time write p1 to f_p1, p2 to f_p2; 2) read from shm, change the value of step; 3) for packets before "step", use the file p1, p2 to overwrite the generated packets, for the packet right on "step", use the fuzzed "input" file.
 
 
-2) Implement the Q (multi q) and switch_to_Q(), proceed_fuzzing()
+2) when to use switch_to_Q() and proceed_fuzzing():
 	- how to jump out of current fuzzing and proceed: the function common_fuzz_stuff, will return 1 if it is time to bail out, so just ask it to bail out if has_new_packet. The label it will go to is abandon_entry. So we should return 2 if new packets are seen, then in the main while loop, deal with 2, call proceed_fuzzing to change target Q.
+
+
+
+
+3) Implement Q:
+
+	- what are those vars of queue that can be directly replaced with Q, and what are those need to use addition, or complete restore.
 
 
 
