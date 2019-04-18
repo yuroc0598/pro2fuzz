@@ -1,0 +1,52 @@
+Progressive Fuzzing:
+
+
+Overview:
+
+1) share progress with fuzzer using shared mem, trace_bits:
+
+init : when shm is created, add one more byte at the end, init it to 0, this is for the "c" value in testing program. (how does TP load and write to this shm? currently TP load by default, so don't load it again.)
+
+
+
+TP write: when the value of c in testing program changes, write to the last byte of shm, (fork server will compare the value of c after each TP with the global prev_c, if it changes, proceed the fuzzing), also, write current reponse p2 to file, new_p2,
+
+fuzzer read: every time after fuzzing, (in fuzz_common_stuff), read from shm, check if the value of c changes, if so, save the current fuzzing input to prev_p1, also read p2 from the file new_p2 and put it into Q2, increment the fuzzing Q from Q1 to Q2
+
+commute: when c changes in TP, TP will increment the value of fixed fuzzing step, "step", (at this moment, fork server is already on, how to reset it, or just leave it and continue fuzzing the next stage?) we can keep the forking server stuff, next time TP is launched, use the prev_p1 for p1, and newly fuzzed p2 from fuzzer for p2
+
+
+
+
+
+
+Hands on:
+
+1) How is c used in fuzzer:
+    - add has_new_packet()
+	- fuzzer will send step value to shm every execute: when to change the value?
+
+	- some basic logic when new packets are seen: (when interesting p1 activate them all), let the fuzzer commands, though some operation could be done either on fuzzer side or TP side. Let the fuzzer decide the step and TP just read it and do what it says:
+		- fuzzer: 1) change shm, set "step" value; 2) put current p2 into Q2, p2 is the response caused by interesting p1; 3) jump out of current fuzzing loop and fuzz on Q2, still put the mutated p2 into "input" file
+		- TP: 1) every time write p1 to f_p1, p2 to f_p2; 2) read from shm, change the value of step; 3) for packets before "step", use the file p1, p2 to overwrite the generated packets, for the packet right on "step", use the fuzzed "input" file.
+
+
+2) Implement the Q (multi q) and switch_to_Q(), proceed_fuzzing()
+
+
+
+
+Done:
+1) how to obtain addr of shm in TP, during instrumentation, afl-clang-fast already does the shmat. (Check where does the binary write bitmap, after that, write c?)
+  - why not use environment var?: no, env var are set before process starts and can only be seen by children
+  - read SHM_EVN_VAR, in TP, use shmat again, basically, map the shm twice. 
+
+
+
+TODO:
+1) shm is mapped twice, if the afl_area_ptr can be obtained from LLVM pass to source code, this can be avoided;
+2) multi q,
+3) Bread-first fuzzing considering only p1 and p2
+4) check AFL_DONT_OPTIMIZE, unset this env var may cause AFL_CLANG_FAST to optimize bbs and bugs cannot be found
+5) in default AFL, compiler instruments each basic block, such that when one basic block executes, the bitmap is updated. It does not read values from the variables inside the TP.
+6) check bg, fg command that bring up the frozen process.
