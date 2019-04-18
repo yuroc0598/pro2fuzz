@@ -31,7 +31,6 @@
 #include "debug.h"
 #include "alloc-inl.h"
 #include "hash.h"
-#include "profuzz.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -321,6 +320,23 @@ enum {
   /* 04 */ FAULT_NOINST,
   /* 05 */ FAULT_NOBITS
 };
+
+
+
+
+/* for pro2fuzz:*/
+
+
+u8 has_new_packet();
+void dump_buf(u8*,u32,u8*);
+void set_step(u8);
+u8 add_to_Q(); 
+void proceed_fuzzing(u8);
+static u8  prev_c=0;                  /* c value, shared with TP          */
+static u8  prev_step=0;               /* step value, shared with TP          */
+static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
+
+
 
 
 /* Get unix time in milliseconds */
@@ -1401,26 +1417,6 @@ static void setup_post(void) {
   post_handler("hello", &tlen);
 
   OKF("Postprocessor installed successfully.");
-
-}
-
-void dump_buf(u8* buf,u32 size,u8* dumptype)
-{
-  //u8* dummy = malloc(10);
-  //memset(dummy,0xFF,10);
-  char* dump_path = alloc_printf("/home/yuroc/tmp/fuzz/%s",dumptype);
-  FILE* pFile=fopen(dump_path,"wb");
-  if(pFile){
-    //char newline = '\n';
-    fwrite(buf,1,size,pFile);
-    //fwrite(&newline,1,1,pFile);
-    //fwrite(&size,1,4,pFile);
-    //fwrite(dummy,1,10,pFile);
-  }
-  else{
-    PFATAL("error when open file for writing!\n");
-  }
-  fclose(pFile);
 
 }
 
@@ -4621,18 +4617,25 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
   if (post_handler) {
 
     out_buf = post_handler(out_buf, &len);
-    if (!out_buf || !len) return 0;
+    if (!out_buf || !len) {
+        ret_common_fuzz =0;
+        return 0;
+    }
 
   }
   write_to_testcase(out_buf, len);
   fault = run_target(argv, exec_tmout);
 
-  if (stop_soon) return 1;
+  if (stop_soon) {
+      ret_common_fuzz = 1;  
+      return 1;
+  }
 
   if (fault == FAULT_TMOUT) {
 
     if (subseq_tmouts++ > TMOUT_LIMIT) {
       cur_skipped_paths++;
+      ret_common_fuzz = 1;  
       return 1;
     }
 
@@ -4645,9 +4648,23 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
      skip_requested = 0;
      cur_skipped_paths++;
+     ret_common_fuzz = 1;  
      return 1;
 
   }
+
+  /*yuroc: if new packets are seen, then return 2, then in fuzz_one, goto abandon_entry, check if it is 2, if 2, then proceed_fuzzing*/
+  if(has_new_packet()== 1){
+    /*maybe do something else for stats
+     
+     
+     
+    */
+    ret_common_fuzz = 2;
+    return 2;
+
+  }
+
 
   /* This handles FAULT_ERROR for us: */
 
@@ -4655,7 +4672,7 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
   if (!(stage_cur % stats_update_freq) || stage_cur + 1 == stage_max)
     show_stats();
-
+  ret_common_fuzz = 0;
   return 0;
 
 }
@@ -6626,26 +6643,60 @@ retry_splicing:
 
 abandon_entry:
 
-  splicing_with = -1;
+  
+  switch(ret_common_fuzz){
+    case 1:
+      splicing_with = -1;
+    
+      /* Update pending_not_fuzzed count if we made it through the calibration
+         cycle and have not seen this entry before. */
+    
+      if (!stop_soon && !queue_cur->cal_failed && !queue_cur->was_fuzzed) {
+        queue_cur->was_fuzzed = 1;
+        pending_not_fuzzed--;
+        if (queue_cur->favored) pending_favored--;
+      }
+    
+      munmap(orig_in, queue_cur->len);
+    
+      if (in_buf != orig_in) ck_free(in_buf);
+      ck_free(out_buf);
+      ck_free(eff_map);
+    
+      /**/
+    
+      return ret_val;
 
-  /* Update pending_not_fuzzed count if we made it through the calibration
-     cycle and have not seen this entry before. */
-
-  if (!stop_soon && !queue_cur->cal_failed && !queue_cur->was_fuzzed) {
-    queue_cur->was_fuzzed = 1;
-    pending_not_fuzzed--;
-    if (queue_cur->favored) pending_favored--;
+    case 2:
+      /*new packets are seen*/
+      set_step(++prev_step);
+      add_to_Q();
+      proceed_fuzzing(prev_step);
+      return ret_val;
+    default:
+      splicing_with = -1;
+    
+      /* Update pending_not_fuzzed count if we made it through the calibration
+         cycle and have not seen this entry before. */
+    
+      if (!stop_soon && !queue_cur->cal_failed && !queue_cur->was_fuzzed) {
+        queue_cur->was_fuzzed = 1;
+        pending_not_fuzzed--;
+        if (queue_cur->favored) pending_favored--;
+      }
+    
+      munmap(orig_in, queue_cur->len);
+    
+      if (in_buf != orig_in) ck_free(in_buf);
+      ck_free(out_buf);
+      ck_free(eff_map);
+    
+      /**/
+    
+      return ret_val;
   }
 
-  munmap(orig_in, queue_cur->len);
-
-  if (in_buf != orig_in) ck_free(in_buf);
-  ck_free(out_buf);
-  ck_free(eff_map);
-
-  return ret_val;
-
-#undef FLIP_BIT
+    #undef FLIP_BIT
 
 }
 
@@ -7726,6 +7777,109 @@ static void save_cmdline(u32 argc, char** argv) {
   *buf = 0;
 
 }
+
+
+
+/*funcs for pro2fuzz*/
+
+void dump_buf(u8* buf,u32 size,u8* dumptype)
+{
+  char* dump_path = alloc_printf("/home/yuroc/tmp/fuzz/%s",dumptype);
+  FILE* pFile=fopen(dump_path,"wb");
+  if(pFile){
+    fwrite(buf,1,size,pFile);
+      }
+  else{
+    PFATAL("error when open file for writing!\n");
+  }
+  fclose(pFile);
+
+}
+
+
+/*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update prev_c if needed*/
+u8 has_new_packet(){
+// get c:
+    u8 cur_c = trace_bits[MAP_SIZE];
+// a simple checking
+    if(cur_c<1 || cur_c>4) PFATAL("cur_c is out of range!\n");
+    if(cur_c==prev_c) return 0;
+	else{
+        prev_c = cur_c;
+        if (cur_c > prev_c) return 1;
+        else return 2;
+    } 
+
+}
+
+/*set the value of step, so that TP can read it and change fuzzing target*/
+void set_step(u8 new_step){
+	u8* shm_last = trace_bits;
+	shm_last[MAP_SIZE] = new_step;
+}
+
+
+//u8 add_to_Q(u8* fname, u32 len, u8 passed_det, u8 qid){
+u8 add_to_Q(){
+	// prepare the Q with ID qid
+	// add_to_queue(fname,len,passed_det);
+    return 1;
+
+}
+
+
+
+/*  read from file p2 that cause this to happen, put p2 into Q2 and fuzz Q2 next, return 1 if proceed, 0 otherwise*/
+
+/*reset fuzzing state, fuzz the Q specified by qid*/
+void proceed_fuzzing(u8 qid){
+
+
+
+
+}
+
+
+/*the following functions are for debug*/
+
+
+void printQHead()
+{
+
+struct queue_entry* q = queue;
+
+FILE* f;
+u8 buf[4096];
+f = fopen(q->fname,"rb");
+int r = fread(buf,1,4096,f);
+dump_buf(buf,r,"QHead");
+
+}
+
+
+void printQ()
+{
+
+struct queue_entry* q = queue;
+struct queue_entry* n;
+
+FILE* f;
+u8 buf[4096];
+char dumpname[1024];
+while(q)
+{
+n = q->next;
+f = fopen(q->fname,"rb");
+int r = fread(buf,1,4096,f);
+snprintf(dumpname,10,"%d",rand());
+dump_buf(buf,r,dumpname);
+q = n;
+}
+}
+
+
+
+
 
 
 #ifndef AFL_LIB

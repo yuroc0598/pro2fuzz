@@ -1,4 +1,12 @@
-#include "profuzz.h"
+u8 has_new_packet();
+void dump_buf(u8*,u32,u8*);
+u8 set_step(u8);
+u8 add_to_Q(); 
+void proceed_fuzzing(u8);
+static u8  prev_c=0;                  /* c value, shared with TP          */
+static u8  prev_step=0;               /* step value, shared with TP          */
+static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
+
 
 void dump_buf(u8* buf,u32 size,u8* dumptype)
 {
@@ -15,15 +23,19 @@ void dump_buf(u8* buf,u32 size,u8* dumptype)
 }
 
 
-/*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases*/
+/*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update prev_c if needed*/
 u8 has_new_packet(){
 // get c:
     u8 cur_c = trace_bits[MAP_SIZE];
 // a simple checking
     if(cur_c<1 || cur_c>4) PFATAL("cur_c is out of range!\n");
     if(cur_c==prev_c) return 0;
-	else if (cur_c > prev_c) return 1;
-	else return 2;
+	else{
+        prev_c = cur_c;
+        if (cur_c > prev_c) return 1;
+        else return 2;
+    } 
+
 }
 
 /*set the value of step, so that TP can read it and change fuzzing target*/
@@ -33,7 +45,8 @@ u8 set_step(u8 new_step){
 }
 
 
-void add_to_Q(u8* fname, u32 len, u8 passed_det, u8 qid){
+//u8 add_to_Q(u8* fname, u32 len, u8 passed_det, u8 qid){
+u8 add_to_Q(){
 	// prepare the Q with ID qid
 	// add_to_queue(fname,len,passed_det);
 
@@ -41,21 +54,7 @@ void add_to_Q(u8* fname, u32 len, u8 passed_det, u8 qid){
 
 
 
-/*proceed if new packet is spotted, if new packet is seen, change step value, then read from file the packets p1 and p2 that cause this to happen, put p2 into Q2 and fuzz Q2 next, return 1 if proceed, 0 otherwise*/
-
-u8 maybe_proceed(char** argv,void* mem, u32 len, u8 fault){
-	
-	u8 res = has_new_packet();
-	
-	if(res == 1){// proceed now
-		set_step(prev_c++);
-		add_to_Q();
-		proceed_fuzzing(prev_step);
-		return 1
-	}
-	return 0;
-}
-
+/*  read from file p2 that cause this to happen, put p2 into Q2 and fuzz Q2 next, return 1 if proceed, 0 otherwise*/
 
 /*reset fuzzing state, fuzz the Q specified by qid*/
 void proceed_fuzzing(u8 qid){
@@ -102,6 +101,4 @@ dump_buf(buf,r,dumpname);
 q = n;
 }
 }
-
-
 
