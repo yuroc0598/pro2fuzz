@@ -32,6 +32,7 @@ Hands on:
 
 
 2) Implement the Q (multi q) and switch_to_Q(), proceed_fuzzing()
+	- how to jump out of current fuzzing and proceed: the function common_fuzz_stuff, will return 1 if it is time to bail out, so just ask it to bail out if has_new_packet. The label it will go to is abandon_entry. So we should return 2 if new packets are seen, then in the main while loop, deal with 2, call proceed_fuzzing to change target Q.
 
 
 

@@ -31,6 +31,7 @@
 #include "debug.h"
 #include "alloc-inl.h"
 #include "hash.h"
+#include "profuzz.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -867,22 +868,6 @@ EXP_ST void read_bitmap(u8* fname) {
 }
 
 
-// yuroc: check if the number of packet flights in TP changes:
-
-static inline u8 has_new_packet(){
-
-// get c:
-    u8 cur_c = trace_bits[MAP_SIZE];
-// a simple checking
-    if(cur_c<1 || cur_c>4) PFATAL("cur_c is out of range!\n");
-    if(cur_c ^ prev_c){
-        return 1;
-    }
-    return 0;
-}
-
-
-
 /* Check if the current execution path brings anything new to the table.
    Update virgin bits to reflect the finds. Returns 1 if the only change is
    the hit-count for a particular tuple; 2 if there are new tuples seen. 
@@ -1385,8 +1370,8 @@ EXP_ST void setup_shm(void) {
   ck_free(shm_str);
 
   trace_bits = shmat(shm_id, NULL, 0);
-  //yuroc: init c
-  trace_bits[MAP_SIZE] = prev_step; // since this is only called once, we'll start from fuzzing the first packet
+  //yuroc: init step
+  trace_bits[MAP_SIZE] = 1; // since this is only called once, we'll start from fuzzing the first packet
   
   if (!trace_bits) PFATAL("shmat() failed");
 

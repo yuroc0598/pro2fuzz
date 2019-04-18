@@ -1,3 +1,4 @@
+#include "profuzz.h"
 
 void dump_buf(u8* buf,u32 size,u8* dumptype)
 {

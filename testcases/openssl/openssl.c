@@ -26,20 +26,12 @@ void err()
 
 int main(int argc, char **argv)
 {
-    /*
-    FILE* ff=fopen("/home/yuroc/tmp/fuzz/f1","wb");//check value of ff
-    fwrite("nah",1,3,ff);
-    fclose(ff);
-    */
 	int r;
 	u8 c, step;
-	// use a prev_c to store previous number of packet flight
-	int prev_c=0;
 	unsigned char buf[4096];
-	char f_step[]="/home/yuroc/workspace/protocol/tools/profuzz/testcases/openssl/step";
-	char ifi[]="/home/yuroc/workspace/protocol/tools/profuzz/testcases/openssl/input";
-	const char f_p1[]="/home/yuroc/workspace/protocol/tools/profuzz/testcases/openssl/in/p1/packet1";
-	const char f_p2[]="/home/yuroc/workspace/protocol/tools/profuzz/testcases/openssl/in/p2/packet2";
+	const char ifi[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/input";
+	const char f_p1[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p1/packet1";
+	const char f_p2[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p2/packet2";
 	FILE *f;
 	char fn[15];
 	SSL_CTX *sctx, *cctx;
@@ -64,15 +56,15 @@ int main(int argc, char **argv)
 	ERR_load_BIO_strings();
 	OpenSSL_add_all_algorithms();
 
-
+    printf("at least we are here\n");
 	if (!(sctx = SSL_CTX_new(TLSv1_method())))
 		err();
     
 
-	if (!SSL_CTX_use_certificate_file(sctx, "/home/yuroc/workspace/protocol/tools/profuzz/testcases/openssl/server.pem", SSL_FILETYPE_PEM))
+	if (!SSL_CTX_use_certificate_file(sctx, "/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/server.pem", SSL_FILETYPE_PEM))
 		err();
 
-	if (!SSL_CTX_use_PrivateKey_file(sctx, "/home/yuroc/workspace/protocol/tools/profuzz/testcases/openssl/server.key", SSL_FILETYPE_PEM))
+	if (!SSL_CTX_use_PrivateKey_file(sctx, "/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/server.key", SSL_FILETYPE_PEM))
 		err();
 
 	if (!(server = SSL_new(sctx)))
@@ -115,12 +107,18 @@ int main(int argc, char **argv)
             break;
         }
 		c++;
-     
+        if(c==1){
+            f = fopen(f_p1,"wb");
+    		fwrite(buf,1,r,f);
+	    	fclose(f);
+        }
 		if (c == step) {
+        /*
         printf("we found step at client\n");
 		f = fopen(f_p1,"wb");
 		fwrite(buf,1,r,f);
 		fclose(f);
+        */
 
 #ifdef __AFL_HAVE_MANUAL_CONTROL
         __AFL_INIT();
@@ -154,11 +152,13 @@ int main(int argc, char **argv)
             break;
         }
 		c++;
+        if(c==2){
+       	    f = fopen(f_p2,"wb");
+    		fwrite(buf,1,r,f);
+	    	fclose(f);
+        }
 		if (c == step) {
         printf("we found step at server\n");
-		f = fopen(f_p1,"wb");
-		fwrite(buf,1,r,f);
-		fclose(f);
 #ifdef __AFL_HAVE_MANUAL_CONTROL
 			__AFL_INIT();
 #endif
@@ -172,12 +172,6 @@ int main(int argc, char **argv)
             fclose(f);
 		}
 		BIO_write(cinbio, buf, r);
-		// write p2 to file
-		if(c==2){
-			f = fopen(f_p2,"wb");
-			fwrite(buf,1,r,f);
-			fclose(f);
-		}
 	
 		printf("server state: %s / %s\n", SSL_state_string(server),
 		       SSL_state_string_long(server));
@@ -190,7 +184,6 @@ int main(int argc, char **argv)
     printf("handshake finished, done or fail, the value of c is %d\n",c);
     shmptr[MAP_SIZE] = c;
     shmdt(shmptr);
-	// TODO: check if c changes
 #endif
 	return 0;
 }
