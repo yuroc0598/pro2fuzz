@@ -9,7 +9,8 @@ void proceed_fuzzing(u8);
 static u8  prev_c=0;                  /* c value, shared with TP          */
 static u8  prev_step=0;               /* step value, shared with TP          */
 static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
-
+static u8  Qid;
+static u8* Qid_str;
 
 
 
@@ -167,6 +168,110 @@ void store_queue(u8 id) {
 
 
 /*extra funcs for pro2fuzz*/
+
+
+/* say we spotted new packets, we want to read the packet that right after the current fuzzing packet and fuzz it in the next round, for now, the testing program will write it to a fixed position, fuzzer can simply read from that position, but make it an argv anyway for future dev*/
+static void read_next_packet(u8* src_path,u8* dest_path,u8 Qid) {
+
+
+/* say we want to put the new packet into Q2, but Q2 is currently empty, then we have to create Q2 in mem and create a folder queue,*/
+
+
+
+  struct dirent **nl;
+  s32 nl_cnt;
+  u32 i;
+  u8* fn;
+
+  ACTF("Scanning '%s'...", src_path);
+
+  /* We use scandir() + alphasort() rather than readdir() because otherwise,
+     the ordering  of test cases would vary somewhat randomly and would be
+     difficult to control. */
+
+  nl_cnt = scandir(src_path, &nl, NULL, alphasort);
+
+  if (nl_cnt < 0) {
+
+    if (errno == ENOENT || errno == ENOTDIR)
+
+      SAYF("\n" cLRD "[-] " cRST
+           " The Q2 file dir does not seem to be valid.\n");
+
+    PFATAL("Unable to open '%s'", src_path);
+
+  }
+
+  if (shuffle_queue && nl_cnt > 1) {
+
+    ACTF("Shuffling queue...");
+    shuffle_ptrs((void**)nl, nl_cnt);
+
+  }
+
+  for (i = 0; i < nl_cnt; i++) {
+
+    struct stat st;
+
+    u8* fn = alloc_printf("%s/%s", src_path, nl[i]->d_name);
+    u8* dfn = alloc_printf("%s/.state/deterministic_done/%s", src_path, nl[i]->d_name);
+
+    u8  passed_det = 0;
+
+    free(nl[i]); /* not tracked */
+ 
+    if (lstat(fn, &st) || access(fn, R_OK))
+      PFATAL("Unable to access '%s'", fn);
+
+    /* This also takes care of . and .. */
+
+    if (!S_ISREG(st.st_mode) || !st.st_size || strstr(fn, "/README.txt")) {
+
+      ck_free(fn);
+      ck_free(dfn);
+      continue;
+
+    }
+
+    if (st.st_size > MAX_FILE) 
+      FATAL("Test case '%s' is too big (%s, limit is %s)", fn,
+            DMS(st.st_size), DMS(MAX_FILE));
+
+    /* Check for metadata that indicates that deterministic fuzzing
+       is complete for this entry. We don't want to repeat deterministic
+       fuzzing when resuming aborted scans, because it would be pointless
+       and probably very time-consuming. */
+
+    if (!access(dfn, F_OK)) passed_det = 1;
+    ck_free(dfn);
+
+    add_to_queue(fn, st.st_size, passed_det);
+
+  }
+
+  //PFATAL("read q finished\n");
+  free(nl); /* not tracked */
+
+  if (!queued_paths) {
+
+    SAYF("\n" cLRD "[-] " cRST
+         "Looks like there are no valid test cases in the input directory! The fuzzer\n"
+         "    needs one or more test case to start with - ideally, a small file under\n"
+         "    1 kB or so. The cases must be stored as regular files directly in the\n"
+         "    input directory.\n");
+
+    FATAL("No usable test cases in '%s'", src_path);
+
+  }
+
+  last_path_time = 0;
+  queued_at_start = queued_paths;
+
+}
+
+
+
+
 
 
 /*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update prev_c if needed*/

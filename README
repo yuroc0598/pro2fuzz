@@ -40,7 +40,7 @@ Hands on:
 3) Implement Q:
 
 	- what are those vars of queue that can be directly replaced with Q, and what are those need to use addition, or complete restore.
-
+	- I/O stuff needs to be updated, the -i input takes the PROG/in, then based on the packet to fuzz, the real input folder is PROG/in/px, and add '-p' option to AFL. So update the in_dir, out_dir. Use a global var to store the value of p, e.g., Qid. And check where do in_dir, out_dir used, update them. or use two more var to represent the raw in and out passed by -i and -o, then make in_dir = in + qid,
 
 
 

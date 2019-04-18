@@ -83,6 +83,8 @@
 EXP_ST u8 *in_dir,                    /* Input directory with test cases  */
           *out_file,                  /* File to fuzz, if any             */
           *out_dir,                   /* Working & output directory       */
+		  *in_dir_raw,
+		  *out_dir_raw,
           *sync_dir,                  /* Synchronization directory        */
           *sync_id,                   /* Fuzzer ID                        */
           *use_banner,                /* Display banner                   */
@@ -7906,25 +7908,31 @@ int main(int argc, char** argv) {
   gettimeofday(&tv, &tz);
   srandom(tv.tv_sec ^ tv.tv_usec ^ getpid());
 
-  while ((opt = getopt(argc, argv, "+i:o:f:m:t:T:dnCB:S:M:x:Q")) > 0)
+  while ((opt = getopt(argc, argv, "+i:o:p:f:m:t:T:dnCB:S:M:x:Q")) > 0)
 
     switch (opt) {
 
       case 'i': /* input dir */
 
-        if (in_dir) FATAL("Multiple -i options not supported");
-        in_dir = optarg;
+        if (in_dir_raw) FATAL("Multiple -i options not supported");
+        in_dir_raw = optarg;
 
-        if (!strcmp(in_dir, "-")) in_place_resume = 1;
+        if (!strcmp(in_dir_raw, "-")) in_place_resume = 1;
 
         break;
 
       case 'o': /* output dir */
 
-        if (out_dir) FATAL("Multiple -o options not supported");
-        out_dir = optarg;
+        if (out_dir_raw) FATAL("Multiple -o options not supported");
+        out_dir_raw = optarg;
         break;
 
+	  case 'p':
+		// yuroc
+		Qid = atoi(optarg);
+		sprintf(Qid_str,"p%s",optarg);
+		
+		break;
       case 'M': { /* master sync ID */
 
           u8* c;
@@ -8079,7 +8087,9 @@ int main(int argc, char** argv) {
         usage(argv[0]);
 
     }
-
+  //yuroc
+  sprintf(in_dir,"%s/%s",in_dir_raw,Qid_str);
+  sprintf(out_dir,"%s/%s",out_dir_raw,Qid_str);
   if (optind == argc || !in_dir || !out_dir) usage(argv[0]);
 
   setup_signal_handlers();
