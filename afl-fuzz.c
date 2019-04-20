@@ -334,12 +334,12 @@ enum {
 u8 has_new_packet();
 void dump_buf(u8*,u32,u8*);
 void set_step(u8);
-void proceed_fuzzing(u8*);
+void proceed_fuzzing();
 static u8  prev_c=0;                  /* c value, shared with TP          */
-static u8  prev_step=0;               /* step value, shared with TP          */
 static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur;
 static u8* Qid_str_cur;
+const u8 Q_max_cycle=2;
 
 
 struct Q
@@ -348,7 +348,7 @@ struct Q
 u8 Qid,
    shuffle_Q;
 
-u64 Q_cycle; // maybe we don't need this, just increase Q cycle everytime it jumps out of original Q
+u64 Q_cycle; // if the cur queue finishes one or two cycle, do backtracking.
 
 u32 Qd_paths,						/* Total number of queued testcases */
 	Qd_variable,                    /* Testcases with variable behavior */
@@ -366,6 +366,8 @@ u32 Qd_paths,						/* Total number of queued testcases */
 	Q_var_byte_count,               /* Bitmap bytes with var behavior   */
 	Q_current_entry,                /* Current queue entry ID           */
 	Q_havoc_div;                /* Cycle count divisor for havoc    */
+
+
 
 struct queue_entry *Qhead,
 				   *Q_cur,
@@ -6713,9 +6715,9 @@ abandon_entry:
 
     case 2:
       /*new packets are seen*/
-      set_step(++prev_step);
-      proceed_fuzzing("p2");
-      return ret_val;
+      proceed_fuzzing();
+      set_step(Qid_cur);
+      return ret_val; //yurocTODO: check what does this ret_val do
     default:
       splicing_with = -1;
     
@@ -7846,6 +7848,8 @@ void switch_to_Q(u8 id){
     
 	struct Q* curQ = multiQ[id-1];
     Qid_cur = curQ->Qid;
+
+	queue_cycle = curQ->Q_cycle;
 	shuffle_queue = curQ->shuffle_Q;
 	queued_paths = curQ->Qd_paths,              /* Total number of queued testcases */
     queued_variable = curQ->Qd_variable,           /* Testcases with variable behavior */
@@ -7884,6 +7888,7 @@ void store_Q(u8 id) {
 	// store global vars from queue to Q
 	// TODO
 	struct Q* curQ = multiQ[id-1];
+	curQ->Q_cycle = queue_cycle;
     curQ->Qid = Qid_cur;
 	curQ->shuffle_Q = shuffle_queue;
 	curQ->Qd_paths = queued_paths,              /* Total number of queued testcases */
@@ -7923,7 +7928,11 @@ struct Q* constructQ(u8 id){
     return newQ;
 }
 
+void destroy_Q(u8 id){
 
+// yurocTODO: destroy Q
+
+}
 
 
 /*init the first Q*/
@@ -7941,12 +7950,12 @@ void init_Q(){
 
 
 /* say we spotted new packets, we want to read the packet that right after the current fuzzing packet and fuzz it in the next round, for now, the testing program will write it to a fixed position, fuzzer can simply read from that position, but make it an argv anyway for future dev*/
-void proceed_fuzzing(u8* fname) { // here don't need Qid, just take the global Qid as current Qid.
+void proceed_fuzzing() { // here don't need Qid, just take the global Qid as current Qid.
 
     Qid_cur++;
-
     Qid_str_cur = alloc_printf("p%x",Qid_cur);
     in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
+	u8* fname = alloc_printf("%s/packet",in_dir);
     out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
 
     /*scan the src_path first to see if it exist*/
@@ -7997,7 +8006,13 @@ void proceed_fuzzing(u8* fname) { // here don't need Qid, just take the global Q
 }
 
 
+/*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
+void regress_fuzzing(){
 
+	store_Q(Qid_cur--);
+	switch_to_Q(Qid_cur);
+
+}
 
 
 
@@ -8396,6 +8411,14 @@ int main(int argc, char** argv) {
     if (!queue_cur) {
 
       queue_cycle++;
+	  //yurocTODO: if queue_cycle is larger than 2 and step is larger than 1, decrease step, if step is one, do nothing
+
+	  if(queue_cycle>Q_max_cycle && Qid_cur>1){
+
+		regress_fuzzing();
+
+      }
+		
       current_entry     = 0;
       cur_skipped_paths = 0;
       queue_cur         = queue;

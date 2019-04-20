@@ -30,8 +30,8 @@ int main(int argc, char **argv)
 	u8 c, step;
 	unsigned char buf[4096];
 	const char ifi[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/input";
-	const char f_p1[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p1/packet1";
-	const char f_p2[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p2/packet2";
+	const char f_p1[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p1/packet";
+	const char f_p2[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p2/packet";
 	FILE *f;
 	char fn[15];
 	SSL_CTX *sctx, *cctx;

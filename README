@@ -48,6 +48,18 @@ Hands on:
 
 
 
+
+4) TP:
+	- need to let TP fuzz according to the step value, e.g., if c is smaller than step, then just ask it to read from the packets written previously
+	- make the name of written packet the same, "packet", distinguish them by the folder they are in.
+
+
+5) back-track fuzzing
+	- when to stop current fuzzing step and back track?: when the new Q, say, Q2, has finished one or two circle? or when the tracebits have not changed for a long time
+	- how to do backtrack?  step value decreases by 2, save current Q, switch to lower Q,
+
+
+
 Done:
 1) how to obtain addr of shm in TP, during instrumentation, afl-clang-fast already does the shmat. (Check where does the binary write bitmap, after that, write c?)
   - why not use environment var?: no, env var are set before process starts and can only be seen by children
