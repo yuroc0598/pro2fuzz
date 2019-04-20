@@ -41,6 +41,10 @@ Hands on:
 
 	- what are those vars of queue that can be directly replaced with Q, and what are those need to use addition, or complete restore.
 	- I/O stuff needs to be updated, the -i input takes the PROG/in, then based on the packet to fuzz, the real input folder is PROG/in/px, and add '-p' option to AFL. So update the in_dir, out_dir. Use a global var to store the value of p, e.g., Qid. And check where do in_dir, out_dir used, update them. or use two more var to represent the raw in and out passed by -i and -o, then make in_dir = in + qid,
+    - Make sure that switch_to_Q is called before add_to_Q, cz in add_to_Q, the globals are not checked, must be the globals from the right Q; also check when is the queue entry written to file in the dir "out_dir/queue", cz we need to do the same when reading the q2: It's in function pivot_inputs(), add it to the read_next_packet() when first switches to some Q;
+    - the var Q_havoc_div need to be init when the struct Q is created;
+    - top_rated needs to be taken care of separatedly, if we maintain multiple top_rated, then make the global one a pointer, when switch_to_Q, change the value of top_rated, but in store_Q, there is no need to change the top_rated. Check whether a pointer of top_rated would cause any problem in exisiting AFL impl.
+    - do not forget to create Q1 at the beginning;
 
 
 

@@ -2,7 +2,7 @@
 USR=`logname`
 AFL_PATH="./"
 PROG_PATH="$AFL_PATH/testcases/openssl"
-NTHREAD=$1
+NTHREAD=$2
 
 # usage
 
@@ -16,7 +16,7 @@ echo "------Number_of_Threads: int from 1 to N, don't be greedy and leave some c
 
 # check arg format
 
-if [ $# -ne 1 ] || [ $1 -lt 1 ]
+if [ $# -ne 2 ] || [ $1 -lt 1 ] || [ $2 -lt 1]
 then
 echo "invalid arguments, check usage below:"
 usage

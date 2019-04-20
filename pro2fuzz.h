@@ -5,7 +5,6 @@ u8 has_new_packet();
 void dump_buf(u8*,u32,u8*);
 u8 set_step(u8);
 u8 add_to_Q(); 
-void proceed_fuzzing(u8);
 static u8  prev_c=0;                  /* c value, shared with TP          */
 static u8  prev_step=0;               /* step value, shared with TP          */
 static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
@@ -47,38 +46,9 @@ struct queue_entry *Qhead,
 				   *Q_cur,
                    *Q_top,
                    *Q_prev100;
-struct queue_entry *Q_top_rated[MAP_SIZE];
+struct queue_entry **Q_top_rated;
 	
 
-};
-
-
-/*original queue*/
-struct queue_entry {
-  u8* fname;                          /* File name for the test case      */
-  u32 len;                            /* Input length                     */
-
-  u8  cal_failed,                     /* Calibration failed?              */
-      trim_done,                      /* Trimmed?                         */
-      was_fuzzed,                     /* Had any fuzzing done yet?        */
-      passed_det,                     /* Deterministic stages passed?     */
-      has_new_cov,                    /* Triggers new coverage?           */
-      var_behavior,                   /* Variable behavior?               */
-      favored,                        /* Currently favored?               */
-      fs_redundant;                   /* Marked as redundant in the fs?   */
-
-  u32 bitmap_size,                    /* Number of bits set in bitmap     */
-      exec_cksum;                     /* Checksum of the execution trace  */
-
-  u64 exec_us,                        /* Execution time (us)              */
-      handicap,                       /* Number of queue cycles behind    */
-      depth;                          /* Path depth                       */
-
-  u8* trace_mini;                     /* Trace bytes, if kept             */
-  u32 tc_ref;                         /* Trace bytes ref count            */
-
-  struct queue_entry *next,           /* Next element, if any             */
-                     *next_100;       /* 100 elements ahead               */
 };
 
 
@@ -86,6 +56,9 @@ struct queue_entry {
 
 struct Q* multiQ[8]; // init 6 Qs for now
 
+
+
+/*extra functions for pro2fuzz*/
 
 
 /*
@@ -119,6 +92,12 @@ void switch_to_Q(u8 id){
 	q_top = curQ->Q_top;
 	q_prev100 = curQ->Q_prev100;
 	q_top_rated = curQ->Q_top_rated;
+    // also need to change in_dir and out_dir
+    u8* qstr;
+    sprintf(qstr,"q%x",Qid);
+    sprintf(in_dir,"%s/%s",in_dir_raw,qstr);
+    sprintf(out_dir,"%s/%s",out_dir_raw,qstr);
+
 }
 
 
@@ -162,76 +141,43 @@ void store_queue(u8 id) {
 
 
 
+/*construct Q*/
+
+void constructQ(u8 Qid){
+    struct Q* newQ  = ck_alloc(sizeof(struct Q));
+    newQ->Qid = Qid;
+    multiQ[Qid] = newQ;
+}
 
 
 
 
 
-/*extra funcs for pro2fuzz*/
+
+/*add to Q, set up the global and add to queue, assume that at this moment, the globals related to queue have already been set according to Q, which means switch_to_Q must be called before add_to_Q*/
+
+void add_to_Q(u8* fname, u32 len, u8 passed_det, u8 Qid){
+
+// basically add_to_queue, so don't need to impl it.
+}
+
 
 
 /* say we spotted new packets, we want to read the packet that right after the current fuzzing packet and fuzz it in the next round, for now, the testing program will write it to a fixed position, fuzzer can simply read from that position, but make it an argv anyway for future dev*/
-static void read_next_packet(u8* src_path,u8* dest_path,u8 Qid) {
+static void read_next_packet(u8* fname,u8 Qid) {
 
 
-/* say we want to put the new packet into Q2, but Q2 is currently empty, then we have to create Q2 in mem and create a folder queue,*/
-
-
-
-  struct dirent **nl;
-  s32 nl_cnt;
-  u32 i;
-  u8* fn;
-
-  ACTF("Scanning '%s'...", src_path);
-
-  /* We use scandir() + alphasort() rather than readdir() because otherwise,
-     the ordering  of test cases would vary somewhat randomly and would be
-     difficult to control. */
-
-  nl_cnt = scandir(src_path, &nl, NULL, alphasort);
-
-  if (nl_cnt < 0) {
-
-    if (errno == ENOENT || errno == ENOTDIR)
-
-      SAYF("\n" cLRD "[-] " cRST
-           " The Q2 file dir does not seem to be valid.\n");
-
-    PFATAL("Unable to open '%s'", src_path);
-
-  }
-
-  if (shuffle_queue && nl_cnt > 1) {
-
-    ACTF("Shuffling queue...");
-    shuffle_ptrs((void**)nl, nl_cnt);
-
-  }
-
-  for (i = 0; i < nl_cnt; i++) {
-
+    /*scan the src_path first to see if it exist*/
+    u8* fn = alloc_printf("%s/%s",in_dir,fname);
+    if (access(fn,F_OK)!=0) PFATAL("The packet with Qid %x does not exist in %s\n", Qid, fn);
     struct stat st;
-
-    u8* fn = alloc_printf("%s/%s", src_path, nl[i]->d_name);
-    u8* dfn = alloc_printf("%s/.state/deterministic_done/%s", src_path, nl[i]->d_name);
+    u8* dfn = alloc_printf("%s/.state/deterministic_done/%s", in_dir,fname);
 
     u8  passed_det = 0;
 
-    free(nl[i]); /* not tracked */
- 
     if (lstat(fn, &st) || access(fn, R_OK))
       PFATAL("Unable to access '%s'", fn);
 
-    /* This also takes care of . and .. */
-
-    if (!S_ISREG(st.st_mode) || !st.st_size || strstr(fn, "/README.txt")) {
-
-      ck_free(fn);
-      ck_free(dfn);
-      continue;
-
-    }
 
     if (st.st_size > MAX_FILE) 
       FATAL("Test case '%s' is too big (%s, limit is %s)", fn,
@@ -245,27 +191,26 @@ static void read_next_packet(u8* src_path,u8* dest_path,u8 Qid) {
     if (!access(dfn, F_OK)) passed_det = 1;
     ck_free(dfn);
 
-    add_to_queue(fn, st.st_size, passed_det);
 
-  }
+    /*put into Q with Qid, but first check if this Q already exist, otherwise create it*/
 
-  //PFATAL("read q finished\n");
-  free(nl); /* not tracked */
+    if (!multiQ[Qid]) {
+        constructQ(Qid);
+        store_Q(Qid-1);
+        switch_to_Q(Qid);
 
-  if (!queued_paths) {
+        add_to_queue(fn, st.st_size, passed_det);
+        last_path_time = 0;
+        queued_at_start = 1;
+        queued_paths = 1;
+        pivot_inputs();
+    }
 
-    SAYF("\n" cLRD "[-] " cRST
-         "Looks like there are no valid test cases in the input directory! The fuzzer\n"
-         "    needs one or more test case to start with - ideally, a small file under\n"
-         "    1 kB or so. The cases must be stored as regular files directly in the\n"
-         "    input directory.\n");
-
-    FATAL("No usable test cases in '%s'", src_path);
-
-  }
-
-  last_path_time = 0;
-  queued_at_start = queued_paths;
+    else{
+         store_Q(Qid-1);
+         switch_to_Q(Qid);
+         add_to_queue(fn, st.st_size, passed_det);
+    }
 
 }
 
@@ -294,31 +239,6 @@ u8 set_step(u8 new_step){
 	u8* shm_last = trace_bits;
 	shm_last[MAP_SIZE] = new_step;
 }
-
-
-//u8 add_to_Q(u8* fname, u32 len, u8 passed_det, u8 qid){
-u8 add_to_Q(){
-	// prepare the Q with ID qid
-	// add_to_queue(fname,len,passed_det);
-
-}
-
-
-
-/*  read from file p2 that cause this to happen, put p2 into Q2 and fuzz Q2 next, return 1 if proceed, 0 otherwise*/
-
-/*reset fuzzing state, fuzz the Q specified by qid*/
-void proceed_fuzzing(u8 qid_cur, u8 qid_next){
-
-	store_queue(qid_cur);
-	switch_to_queue(qid_next);
-
-
-}
-
-
-
-
 
 
 

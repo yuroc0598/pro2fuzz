@@ -326,20 +326,62 @@ enum {
 
 
 
-/* for pro2fuzz:*/
+/* --------------------------------start globals for pro2fuzz:--------------------------------------------*/
+
+/*declare globals for pro2fuzz*/
 
 
 u8 has_new_packet();
 void dump_buf(u8*,u32,u8*);
 void set_step(u8);
-u8 add_to_Q(); 
-void proceed_fuzzing(u8);
+void proceed_fuzzing(u8*);
 static u8  prev_c=0;                  /* c value, shared with TP          */
 static u8  prev_step=0;               /* step value, shared with TP          */
 static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
+static u8  Qid_cur;
+static u8* Qid_str_cur;
+
+
+struct Q
+{
+
+u8 Qid,
+   shuffle_Q;
+
+u64 Q_cycle; // maybe we don't need this, just increase Q cycle everytime it jumps out of original Q
+
+u32 Qd_paths,						/* Total number of queued testcases */
+	Qd_variable,                    /* Testcases with variable behavior */
+	Qd_at_start,                    /* Total number of initial inputs   */
+	Qd_discovered,                  /* Items discovered during this run */
+	Qd_imported,                    /* Items imported via -S            */
+	Qd_favored,                     /* Paths deemed favorable           */
+	Qd_with_cov,                    /* Paths with new coverage bytes    */
+	Q_pending_not_fuzzed,           /* Queued but not done yet          */
+	Q_pending_favored,              /* Pending favored paths            */
+	Q_cur_skipped_paths,            /* Abandoned inputs in cur cycle    */
+	Q_cur_depth,                    /* Current path depth               */
+	Q_max_depth,                    /* Max path depth                   */
+	Q_useless_at_start,             /* Number of useless starting paths */
+	Q_var_byte_count,               /* Bitmap bytes with var behavior   */
+	Q_current_entry,                /* Current queue entry ID           */
+	Q_havoc_div;                /* Cycle count divisor for havoc    */
+
+struct queue_entry *Qhead,
+				   *Q_cur,
+                   *Q_top,
+                   *Q_prev100;
+struct queue_entry *Q_top_rated[MAP_SIZE];
+	
+
+};
+
+
+struct Q* multiQ[8]; // init 6 Qs for now
 
 
 
+/* ------------------------------------^ end globals for pro2fuzz------------------------------------------*/
 
 /* Get unix time in milliseconds */
 
@@ -6672,8 +6714,7 @@ abandon_entry:
     case 2:
       /*new packets are seen*/
       set_step(++prev_step);
-      add_to_Q();
-      proceed_fuzzing(prev_step);
+      proceed_fuzzing("p2");
       return ret_val;
     default:
       splicing_with = -1;
@@ -7781,22 +7822,183 @@ static void save_cmdline(u32 argc, char** argv) {
 }
 
 
+/*-----------------------------------------start extra funcs for pro2fuzz----------------------------------*/
 
-/*funcs for pro2fuzz*/
 
-void dump_buf(u8* buf,u32 size,u8* dumptype)
-{
-  char* dump_path = alloc_printf("/home/yuroc/tmp/fuzz/%s",dumptype);
-  FILE* pFile=fopen(dump_path,"wb");
-  if(pFile){
-    fwrite(buf,1,size,pFile);
-      }
-  else{
-    PFATAL("error when open file for writing!\n");
-  }
-  fclose(pFile);
+/* copy an array to another, used for top_rated*/
+
+void copy_top_rated(struct queue_entry** src, struct queue_entry** dst){
+
+    memcpy(dst,src,MAP_SIZE);
 
 }
+
+
+
+/*
+switch to Q with Qid, the idea is to use the struct member of Q with Qid to replace the current global queue variables\
+This is basically the member of struct Q, note that some of them can be directly replaced, but some of them have a cumulative relationship with the gobal queue variables.
+*/
+
+
+void switch_to_Q(u8 id){
+
+    
+	struct Q* curQ = multiQ[id-1];
+    Qid_cur = curQ->Qid;
+	shuffle_queue = curQ->shuffle_Q;
+	queued_paths = curQ->Qd_paths,              /* Total number of queued testcases */
+    queued_variable = curQ->Qd_variable,           /* Testcases with variable behavior */
+    queued_at_start = curQ->Qd_at_start,           /* Total number of initial inputs   */
+    queued_discovered = curQ->Qd_discovered,         /* Items discovered during this run */
+    queued_imported = curQ->Qd_imported,           /* Items imported via -S            */
+    queued_favored = curQ->Qd_favored,            /* Paths deemed favorable           */
+    queued_with_cov = curQ->Qd_with_cov,           /* Paths with new coverage bytes    */
+    pending_not_fuzzed = curQ->Q_pending_not_fuzzed,        /* Queued but not done yet          */
+    pending_favored = curQ->Q_pending_favored,           /* Pending favored paths            */
+    cur_skipped_paths = curQ->Q_cur_skipped_paths,         /* Abandoned inputs in cur cycle    */
+    cur_depth = curQ->Q_cur_depth,                 /* Current path depth               */
+    max_depth = curQ->Q_max_depth,                 /* Max path depth                   */
+    useless_at_start = curQ->Q_useless_at_start,          /* Number of useless starting paths */
+    var_byte_count = curQ->Q_var_byte_count,            /* Bitmap bytes with var behavior   */
+    current_entry = curQ->Q_current_entry,             /* Current queue entry ID           */
+    havoc_div = curQ->Q_havoc_div;             /* Cycle count divisor for havoc    */
+	queue = curQ->Qhead;
+	queue_cur = curQ->Q_cur;
+	queue_top = curQ->Q_top;
+	q_prev100 = curQ->Q_prev100;
+	copy_top_rated(top_rated,curQ->Q_top_rated);
+    // also need to change in_dir and out_dir
+
+}
+
+
+
+
+
+/*maybe we need a reverse function of switch_to_Q, to put global variables of queue into Q*/
+
+
+void store_Q(u8 id) {
+
+	// store global vars from queue to Q
+	// TODO
+	struct Q* curQ = multiQ[id-1];
+    curQ->Qid = Qid_cur;
+	curQ->shuffle_Q = shuffle_queue;
+	curQ->Qd_paths = queued_paths,              /* Total number of queued testcases */
+    curQ->Qd_variable = queued_variable,           /* Testcases with variable behavior */
+    curQ->Qd_at_start = queued_at_start,           /* Total number of initial inputs   */
+    curQ->Qd_discovered = queued_discovered,         /* Items discovered during this run */
+    curQ->Qd_imported = queued_imported,           /* Items imported via -S            */
+    curQ->Qd_favored = queued_favored,            /* Paths deemed favorable           */
+    curQ->Qd_with_cov = queued_with_cov,           /* Paths with new coverage bytes    */
+    curQ->Q_pending_not_fuzzed = pending_not_fuzzed,        /* Queued but not done yet          */
+    curQ->Q_pending_favored = pending_favored,           /* Pending favored paths            */
+    curQ->Q_cur_skipped_paths = cur_skipped_paths,         /* Abandoned inputs in cur cycle    */
+    curQ->Q_cur_depth = cur_depth,                 /* Current path depth               */
+    curQ->Q_max_depth = max_depth,                 /* Max path depth                   */
+    curQ->Q_useless_at_start = useless_at_start,          /* Number of useless starting paths */
+    curQ->Q_var_byte_count = var_byte_count,            /* Bitmap bytes with var behavior   */
+    curQ->Q_current_entry = current_entry,             /* Current queue entry ID           */
+    curQ->Q_havoc_div = havoc_div;             /* Cycle count divisor for havoc    */
+	curQ->Qhead = queue;
+	curQ->Q_cur = queue_cur;
+	curQ->Q_top = queue_top;
+	curQ->Q_prev100 = q_prev100;
+    copy_top_rated(top_rated,curQ->Q_top_rated);
+
+}
+
+
+
+
+
+/*construct Q*/
+
+struct Q* constructQ(u8 id){
+    struct Q* newQ  = ck_alloc(sizeof(struct Q));
+    newQ->Qid = id;
+    newQ->Q_havoc_div = 1;
+    return newQ;
+}
+
+
+
+
+/*init the first Q*/
+
+void init_Q(){
+
+    // check if the Qid_cur is 1, if not, something is wrong
+    if(Qid_cur!=1) PFATAL("Qid_cur is not 1 when init Q, something is wrong\n");
+
+    multiQ[0]=constructQ(1);
+    switch_to_Q(1);
+}
+
+
+
+
+/* say we spotted new packets, we want to read the packet that right after the current fuzzing packet and fuzz it in the next round, for now, the testing program will write it to a fixed position, fuzzer can simply read from that position, but make it an argv anyway for future dev*/
+void proceed_fuzzing(u8* fname) { // here don't need Qid, just take the global Qid as current Qid.
+
+    Qid_cur++;
+
+    Qid_str_cur = alloc_printf("p%x",Qid_cur);
+    in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
+    out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
+
+    /*scan the src_path first to see if it exist*/
+    u8* fn = alloc_printf("%s/%s",in_dir,fname);
+    if (access(fn,F_OK)!=0) PFATAL("The packet with Qid %x does not exist in %s\n", Qid_cur, fn);
+    struct stat st;
+    u8* dfn = alloc_printf("%s/.state/deterministic_done/%s", in_dir,fname);
+
+    if (lstat(fn, &st) || access(fn, R_OK))
+      PFATAL("Unable to access '%s'", fn);
+
+
+    if (st.st_size > MAX_FILE) 
+      FATAL("Test case '%s' is too big (%s, limit is %s)", fn,
+            DMS(st.st_size), DMS(MAX_FILE));
+
+    /* Check for metadata that indicates that deterministic fuzzing
+       is complete for this entry. We don't want to repeat deterministic
+       fuzzing when resuming aborted scans, because it would be pointless
+       and probably very time-consuming. */
+    u8 passed_det = 0;
+
+    if (!access(dfn, F_OK)) passed_det = 1;
+    ck_free(dfn);
+
+
+    /*put into Q with Qid, but first check if this Q already exist, otherwise create it*/
+
+    if (!multiQ[Qid_cur-1]) {
+
+        multiQ[Qid_cur-1] = constructQ(Qid_cur);
+        store_Q(Qid_cur-1);
+        switch_to_Q(Qid_cur);
+
+        add_to_queue(fn, st.st_size, passed_det);
+        last_path_time = 0;
+        queued_at_start = 1;
+        queued_paths = 1;
+        pivot_inputs();
+    }
+
+    else{
+         store_Q(Qid_cur-1);
+         switch_to_Q(Qid_cur);
+         add_to_queue(fn, st.st_size, passed_det); // yurocTODO, maybe check if we need to add passed_det
+    }
+
+}
+
+
+
+
 
 
 /*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update prev_c if needed*/
@@ -7819,28 +8021,6 @@ void set_step(u8 new_step){
 	u8* shm_last = trace_bits;
 	shm_last[MAP_SIZE] = new_step;
 }
-
-
-//u8 add_to_Q(u8* fname, u32 len, u8 passed_det, u8 qid){
-u8 add_to_Q(){
-	// prepare the Q with ID qid
-	// add_to_queue(fname,len,passed_det);
-    return 1;
-
-}
-
-
-
-/*  read from file p2 that cause this to happen, put p2 into Q2 and fuzz Q2 next, return 1 if proceed, 0 otherwise*/
-
-/*reset fuzzing state, fuzz the Q specified by qid*/
-void proceed_fuzzing(u8 qid){
-
-
-
-
-}
-
 
 /*the following functions are for debug*/
 
@@ -7879,8 +8059,23 @@ q = n;
 }
 }
 
+void dump_buf(u8* buf,u32 size,u8* dumptype)
+{
+  char* dump_path = alloc_printf("/home/yuroc/tmp/fuzz/%s",dumptype);
+  FILE* pFile=fopen(dump_path,"wb");
+  if(pFile){
+    fwrite(buf,1,size,pFile);
+      }
+  else{
+    PFATAL("error when open file for writing!\n");
+  }
+  fclose(pFile);
+
+}
 
 
+
+/*-------------------------------------------end extra funcs for pro2fuzz----------------------------------*/
 
 
 
@@ -7929,8 +8124,8 @@ int main(int argc, char** argv) {
 
 	  case 'p':
 		// yuroc
-		Qid = atoi(optarg);
-		sprintf(Qid_str,"p%s",optarg);
+		Qid_cur = optarg[0]-'0';
+		Qid_str_cur = alloc_printf("p%s",optarg);
 		
 		break;
       case 'M': { /* master sync ID */
@@ -8088,8 +8283,10 @@ int main(int argc, char** argv) {
 
     }
   //yuroc
-  sprintf(in_dir,"%s/%s",in_dir_raw,Qid_str);
-  sprintf(out_dir,"%s/%s",out_dir_raw,Qid_str);
+
+  in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
+  out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
+  init_Q();
   if (optind == argc || !in_dir || !out_dir) usage(argv[0]);
 
   setup_signal_handlers();
