@@ -57,6 +57,7 @@ Hands on:
 5) back-track fuzzing
 	- when to stop current fuzzing step and back track?: when the new Q, say, Q2, has finished one or two circle? or when the tracebits have not changed for a long time
 	- how to do backtrack?  step value decreases by 2, save current Q, switch to lower Q,
+	- rethink the value of decrease and increase of step value again, suppose at first we only have c=2, then next time c=4; or from c=2 then c=3, how to determine the change of step value.
 
 
 
