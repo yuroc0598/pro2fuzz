@@ -333,14 +333,15 @@ enum {
 
 u8 has_new_packet();
 void dump_buf(u8*,u32,u8*);
-void set_step(u8);
+void set_step();
 void proceed_fuzzing();
-static u8  prev_c=0;                  /* c value, shared with TP          */
+static u8  c_prev=0;                  /* c value, shared with TP          */
 static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur;
 static u8* Qid_str_cur;
 const u8 Q_max_cycle=2;
-
+const u8 c_min = 1;
+const u8 c_max = 6;
 
 struct Q
 {
@@ -379,7 +380,7 @@ struct queue_entry *Q_top_rated[MAP_SIZE];
 };
 
 
-struct Q* multiQ[8]; // init 6 Qs for now
+struct Q* multiQ[8]; // init 8 Qs for now
 
 
 
@@ -4672,6 +4673,15 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
   write_to_testcase(out_buf, len);
   fault = run_target(argv, exec_tmout);
 
+  /*yuroc: if new packets are seen, then return 2, then in fuzz_one, goto abandon_entry, check if it is 2, if 2, then proceed_fuzzing*/
+  if(has_new_packet()== 1){
+    /*maybe do something else for stats
+    */
+    ret_common_fuzz = 2;
+    return 2;
+  }
+
+
   if (stop_soon) {
       ret_common_fuzz = 1;  
       return 1;
@@ -4699,18 +4709,6 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
   }
 
-  /*yuroc: if new packets are seen, then return 2, then in fuzz_one, goto abandon_entry, check if it is 2, if 2, then proceed_fuzzing*/
-  if(has_new_packet()== 1){
-    /*maybe do something else for stats
-     
-     
-     
-    */
-    ret_common_fuzz = 2;
-    return 2;
-
-  }
-
 
   /* This handles FAULT_ERROR for us: */
 
@@ -4718,6 +4716,7 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
   if (!(stage_cur % stats_update_freq) || stage_cur + 1 == stage_max)
     show_stats();
+
   ret_common_fuzz = 0;
   return 0;
 
@@ -6689,37 +6688,14 @@ retry_splicing:
 
 abandon_entry:
 
-  
-  switch(ret_common_fuzz){
-    case 1:
-      splicing_with = -1;
-    
-      /* Update pending_not_fuzzed count if we made it through the calibration
-         cycle and have not seen this entry before. */
-    
-      if (!stop_soon && !queue_cur->cal_failed && !queue_cur->was_fuzzed) {
-        queue_cur->was_fuzzed = 1;
-        pending_not_fuzzed--;
-        if (queue_cur->favored) pending_favored--;
-      }
-    
-      munmap(orig_in, queue_cur->len);
-    
-      if (in_buf != orig_in) ck_free(in_buf);
-      ck_free(out_buf);
-      ck_free(eff_map);
-    
-      /**/
-    
-      return ret_val;
-
-    case 2:
+  if(ret_common_fuzz==2){
       /*new packets are seen*/
-      proceed_fuzzing();
-      set_step(Qid_cur);
+            ret_val = 2;
       return ret_val; //yurocTODO: check what does this ret_val do
-    default:
-      splicing_with = -1;
+  }
+  else{
+  
+       splicing_with = -1;
     
       /* Update pending_not_fuzzed count if we made it through the calibration
          cycle and have not seen this entry before. */
@@ -6739,10 +6715,9 @@ abandon_entry:
       /**/
     
       return ret_val;
-  }
 
-    #undef FLIP_BIT
-
+   }
+     #undef FLIP_BIT
 }
 
 
@@ -7929,9 +7904,8 @@ struct Q* constructQ(u8 id){
 }
 
 void destroy_Q(u8 id){
-
 // yurocTODO: destroy Q
-
+    multiQ[id-1] = NULL;
 }
 
 
@@ -7953,6 +7927,7 @@ void init_Q(){
 void proceed_fuzzing() { // here don't need Qid, just take the global Qid as current Qid.
 
     Qid_cur++;
+    set_step();
     Qid_str_cur = alloc_printf("p%x",Qid_cur);
     in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
 	u8* fname = alloc_printf("%s/packet",in_dir);
@@ -8009,32 +7984,34 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
 
-	store_Q(Qid_cur--);
+	destroy_Q(Qid_cur--);
+    set_step();
 	switch_to_Q(Qid_cur);
+    
 
 }
 
 
 
-/*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update prev_c if needed*/
+/*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update c_prev if needed*/
 u8 has_new_packet(){
 // get c:
-    u8 cur_c = trace_bits[MAP_SIZE];
+    u8 c_cur = trace_bits[MAP_SIZE];
 // a simple checking
-    if(cur_c<1 || cur_c>4) PFATAL("cur_c is out of range!\n");
-    if(cur_c==prev_c) return 0;
+    if(c_cur<c_min || c_cur>c_max) PFATAL("current count of packets is out of range!\n");
+    if(c_cur==c_prev) return 0;
 	else{
-        prev_c = cur_c;
-        if (cur_c > prev_c) return 1;
+        c_prev = c_cur;
+        if (c_cur > c_prev) return 1;
         else return 2;
     } 
 
 }
 
 /*set the value of step, so that TP can read it and change fuzzing target*/
-void set_step(u8 new_step){
+void set_step(){
 	u8* shm_last = trace_bits;
-	shm_last[MAP_SIZE] = new_step;
+	shm_last[MAP_SIZE] = Qid_cur;
 }
 
 /*the following functions are for debug*/
@@ -8453,6 +8430,12 @@ int main(int argc, char** argv) {
     }
 
     skipped_fuzz = fuzz_one(use_argv);
+        
+    if(skipped_fuzz==2){
+         proceed_fuzzing();
+    }
+    
+   
 
     if (!stop_soon && sync_id && !skipped_fuzz) {
       
