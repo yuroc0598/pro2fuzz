@@ -7823,6 +7823,7 @@ void switch_to_Q(u8 id){
 
     
 	struct Q* curQ = multiQ[id-1];
+    if(!curQ) PFATAL("In switch_to_Q, the target Q is empty!\n");
     Qid_cur = curQ->Qid;
 
 	queue_cycle = curQ->Q_cycle;
@@ -7992,7 +7993,6 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
 
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
-
     
 	destroy_Q(Qid_cur);
     Qid_cur--;
