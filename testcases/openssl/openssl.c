@@ -24,6 +24,24 @@ void err()
     exit(-1);
 }
 
+
+void write_packet(int c,unsigned char* buf,int r){
+	char fname[256];
+	sprintf(fname,"/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p%d/packet",c);
+    FILE* f = fopen(fname,"wb");
+    fwrite(buf,1,r,f);
+	fclose(f);
+}
+
+int read_packet(int c,unsigned char* buf){
+	char fname[256];
+	sprintf(fname,"/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p%d/packet",c);
+    FILE* f = fopen(fname,"rb");
+    int r = fread(buf,1,4096,f);
+	fclose(f);
+    return r;
+}
+
 int main(int argc, char **argv)
 {
 	int r;
@@ -32,6 +50,12 @@ int main(int argc, char **argv)
 	const char ifi[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/input";
 	const char f_p1[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p1/packet";
 	const char f_p2[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p2/packet";
+	const char f_p3[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p3/packet";
+	const char f_p4[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p4/packet";
+	const char f_p5[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p5/packet";
+	const char f_p6[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p6/packet";
+
+
 	FILE *f;
 	char fn[15];
 	SSL_CTX *sctx, *cctx;
@@ -107,11 +131,8 @@ int main(int argc, char **argv)
             break;
         }
 		c++;
-        if(c==1){
-            f = fopen(f_p1,"wb");
-    		fwrite(buf,1,r,f);
-	    	fclose(f);
-        }
+
+		write_packet(c,buf,r);
 		if (c == step) {
         /*
         printf("we found step at client\n");
@@ -127,13 +148,10 @@ int main(int argc, char **argv)
     	r = fread(buf, 1, 4096, f);
     	fclose(f);
 
-		} else if (step == 0) {
-			sprintf(fn, "packet-%i", c);
-			f = fopen(fn, "wb");
-			fwrite(buf, 1, r, f);
-            fclose(f);
-		}
-		BIO_write(sinbio, buf, r);
+		} 
+        else r = read_packet(c,buf);
+        
+        BIO_write(sinbio, buf, r);
 
 		r = SSL_do_handshake(server);
 		if (r == -1) {
@@ -152,11 +170,9 @@ int main(int argc, char **argv)
             break;
         }
 		c++;
-        if(c==2){
-       	    f = fopen(f_p2,"wb");
-    		fwrite(buf,1,r,f);
-	    	fclose(f);
-        }
+
+		write_packet(c,buf,r);
+        
 		if (c == step) {
         printf("we found step at server\n");
 #ifdef __AFL_HAVE_MANUAL_CONTROL
@@ -165,13 +181,10 @@ int main(int argc, char **argv)
 			f = fopen(ifi, "rb");
 			r = fread(buf, 1, 4096, f);
 			fclose(f);
-		} else if (step == 0) {
-			sprintf(fn, "packet-%i", c);
-			f = fopen(fn, "wb");
-			fwrite(buf, 1, r, f);
-            fclose(f);
-		}
-		BIO_write(cinbio, buf, r);
+		} else r = read_packet(c,buf);
+
+        BIO_write(cinbio, buf, r);
+
 	
 		printf("server state: %s / %s\n", SSL_state_string(server),
 		       SSL_state_string_long(server));

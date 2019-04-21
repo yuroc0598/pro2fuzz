@@ -335,7 +335,7 @@ u8 has_new_packet();
 void dump_buf(u8*,u32,u8*);
 void set_step();
 void proceed_fuzzing();
-static u8  c_prev=0;                  /* c value, shared with TP          */
+static u8  c_cur=0;                  /* c value, shared with TP          */
 static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur;
 static u8* Qid_str_cur;
@@ -4112,7 +4112,7 @@ static void show_stats(void) {
   SAYF(bV bSTOP "        run time : " cRST "%-34s " bSTG bV bSTOP
        "  cycles done : %s%-5s  " bSTG bV "\n",
        DTD(cur_ms, start_time), tmp, DI(queue_cycle - 1));
-
+  SAYF(bV bSTOP "cur packet count:" cRST "%x" bSTG bV bSTOP "cur STEP:%x" bSTG bV "\n",c_cur,Qid_cur);
   /* We want to warn people about not seeing new paths after a full cycle,
      except when resuming fuzzing or running in non-instrumented mode. */
 
@@ -4672,6 +4672,7 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
   }
   write_to_testcase(out_buf, len);
   fault = run_target(argv, exec_tmout);
+
 
   /*yuroc: if new packets are seen, then return 2, then in fuzz_one, goto abandon_entry, check if it is 2, if 2, then proceed_fuzzing*/
   if(has_new_packet()== 1){
@@ -7846,7 +7847,7 @@ void switch_to_Q(u8 id){
 	queue_cur = curQ->Q_cur;
 	queue_top = curQ->Q_top;
 	q_prev100 = curQ->Q_prev100;
-	copy_top_rated(top_rated,curQ->Q_top_rated);
+	copy_top_rated(curQ->Q_top_rated,top_rated);
     // also need to change in_dir and out_dir
 
 }
@@ -7906,6 +7907,8 @@ struct Q* constructQ(u8 id){
 void destroy_Q(u8 id){
 // yurocTODO: destroy Q
     multiQ[id-1] = NULL;
+    //maybe remove the out dir
+    maybe_delete_out_dir();
 }
 
 
@@ -7926,18 +7929,22 @@ void init_Q(){
 /* say we spotted new packets, we want to read the packet that right after the current fuzzing packet and fuzz it in the next round, for now, the testing program will write it to a fixed position, fuzzer can simply read from that position, but make it an argv anyway for future dev*/
 void proceed_fuzzing() { // here don't need Qid, just take the global Qid as current Qid.
 
+
     Qid_cur++;
     set_step();
+
+    ACTF("Proceed Fuzzing! Now we are fuzzing packet %x\n",Qid_cur);
     Qid_str_cur = alloc_printf("p%x",Qid_cur);
     in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
-	u8* fname = alloc_printf("%s/packet",in_dir);
+	u8* fn = alloc_printf("%s/packet",in_dir);
     out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
 
+    setup_dirs_fds();
+
     /*scan the src_path first to see if it exist*/
-    u8* fn = alloc_printf("%s/%s",in_dir,fname);
     if (access(fn,F_OK)!=0) PFATAL("The packet with Qid %x does not exist in %s\n", Qid_cur, fn);
     struct stat st;
-    u8* dfn = alloc_printf("%s/.state/deterministic_done/%s", in_dir,fname);
+    u8* dfn = alloc_printf("%s/.state/deterministic_done/packet", in_dir);
 
     if (lstat(fn, &st) || access(fn, R_OK))
       PFATAL("Unable to access '%s'", fn);
@@ -7969,10 +7976,12 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
         last_path_time = 0;
         queued_at_start = 1;
         queued_paths = 1;
+        queue_cur = queue;
         pivot_inputs();
     }
 
-    else{
+    else{ // I think this branch will never be executed since old Q has been destroyed
+         PFATAL("This should not happen, old Q is destroyed\n");
          store_Q(Qid_cur-1);
          switch_to_Q(Qid_cur);
          add_to_queue(fn, st.st_size, passed_det); // yurocTODO, maybe check if we need to add passed_det
@@ -7984,34 +7993,33 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
 
-	destroy_Q(Qid_cur--);
+    
+	destroy_Q(Qid_cur);
+    Qid_cur--;
     set_step();
 	switch_to_Q(Qid_cur);
-    
+    ACTF("Regress Fuzzing! Now we are fuzzing packet %x\n",Qid_cur);
 
 }
 
 
 
-/*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update c_prev if needed*/
+/*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update c_cur if needed*/
 u8 has_new_packet(){
 // get c:
-    u8 c_cur = trace_bits[MAP_SIZE];
+    u8 c_new = trace_bits[MAP_SIZE];
 // a simple checking
-    if(c_cur<c_min || c_cur>c_max) PFATAL("current count of packets is out of range!\n");
-    if(c_cur==c_prev) return 0;
-	else{
-        c_prev = c_cur;
-        if (c_cur > c_prev) return 1;
-        else return 2;
-    } 
-
+    if(c_new<c_min || c_new>c_max) PFATAL("current count of packets is out of range!\n");
+    if(c_new > c_cur){
+        c_cur = c_new;
+        return 1;
+       }
+    return 0;
 }
 
 /*set the value of step, so that TP can read it and change fuzzing target*/
 void set_step(){
-	u8* shm_last = trace_bits;
-	shm_last[MAP_SIZE] = Qid_cur;
+	trace_bits[MAP_SIZE] = Qid_cur;
 }
 
 /*the following functions are for debug*/
@@ -8381,6 +8389,7 @@ int main(int argc, char** argv) {
 
   while (1) {
 
+
     u8 skipped_fuzz;
 
     cull_queue();
@@ -8393,6 +8402,7 @@ int main(int argc, char** argv) {
 	  if(queue_cycle>Q_max_cycle && Qid_cur>1){
 
 		regress_fuzzing();
+        PFATAL("now regress fuzz, Qid is %x",Qid_cur);
 
       }
 		
@@ -8433,6 +8443,7 @@ int main(int argc, char** argv) {
         
     if(skipped_fuzz==2){
          proceed_fuzzing();
+         //PFATAL("now proceed fuzz, Qid is %x",Qid_cur);
     }
     
    
@@ -8448,7 +8459,7 @@ int main(int argc, char** argv) {
 
     if (stop_soon) break;
 
-    queue_cur = queue_cur->next;
+    queue_cur = queue_cur->next; // yurocTODO: debug, SIGSEGV
     current_entry++;
 
   }
