@@ -70,6 +70,10 @@ Done:
 
 
 
+ISSUE:
+1) maybe_delete_dirs_fds does not do the job. the folder is not clean. need to force remove files or backup them then remove. the problem happens when try to remove Q2 when regressing fuzzing, but the out_dir related to Q2 is the currently active one, so there's a lock on it.
+
+
 TODO:
 1) shm is mapped twice, if the afl_area_ptr can be obtained from LLVM pass to source code, this can be avoided;
 2) multi q,

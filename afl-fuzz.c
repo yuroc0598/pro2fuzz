@@ -342,6 +342,8 @@ static u8* Qid_str_cur;
 const u8 Q_max_cycle=2;
 const u8 c_min = 1;
 const u8 c_max = 6;
+u8 proceed_times,
+   regress_times;
 
 struct Q
 {
@@ -4112,7 +4114,7 @@ static void show_stats(void) {
   SAYF(bV bSTOP "        run time : " cRST "%-34s " bSTG bV bSTOP
        "  cycles done : %s%-5s  " bSTG bV "\n",
        DTD(cur_ms, start_time), tmp, DI(queue_cycle - 1));
-  SAYF(bV bSTOP "cur packet count:" cRST "%x" bSTG bV bSTOP "cur STEP:%x" bSTG bV "\n",c_cur,Qid_cur);
+  SAYF(bV bSTOP "cur packet count:" cRST "%x" bSTG bV bSTOP "cur STEP:%x" bSTG bV bSTOP "proceed times:%x" bSTG bV bSTOP "regress times:%x"bSTG bV "\n",c_cur,Qid_cur,proceed_times,regress_times);
   /* We want to warn people about not seeing new paths after a full cycle,
      except when resuming fuzzing or running in non-instrumented mode. */
 
@@ -7819,6 +7821,9 @@ This is basically the member of struct Q, note that some of them can be directly
 */
 
 
+
+
+
 void switch_to_Q(u8 id){
 
     
@@ -7850,6 +7855,35 @@ void switch_to_Q(u8 id){
 	q_prev100 = curQ->Q_prev100;
 	copy_top_rated(curQ->Q_top_rated,top_rated);
     // also need to change in_dir and out_dir
+
+
+    /*
+    my_free(Qid_str_cur);
+    my_free(in_dir);
+    my_free(out_dir);
+
+    Qid_str_cur = my_sprintf("p%x",id);
+    in_dir = my_sprintf("%s/%s",in_dir_raw,Qid_str_cur);
+    out_dir = my_sprintf("%s/%s",out_dir_raw,Qid_str_cur);
+    int real = snprintf(Qid_str_cur,0,"p%x",id);
+    Qid_str_cur = (u8*)malloc(real+1);
+    sprintf(Qid_str_cur,"p%x",id);
+
+    real = snprintf(in_dir,0,"%s/%s",in_dir_raw,Qid_str_cur);
+    in_dir = (u8*)malloc(real+1);
+    sprintf(in_dir,"%s/%s",in_dir_raw,Qid_str_cur);
+
+    real = snprintf(out_dir,0,"%s/%s",out_dir_raw,Qid_str_cur);
+    out_dir = (u8*)malloc(real+1);
+    sprintf(out_dir,"%s/%s",out_dir_raw,Qid_str_cur);
+    */
+
+    ck_free(Qid_str_cur);
+    ck_free(in_dir);
+    ck_free(out_dir);
+    Qid_str_cur = alloc_printf("p%x",id);
+    in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
+    out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
 
 }
 
@@ -7909,7 +7943,14 @@ void destroy_Q(u8 id){
 // yurocTODO: destroy Q
     multiQ[id-1] = NULL;
     //maybe remove the out dir
-    maybe_delete_out_dir();
+    maybe_delete_out_dir(); // replace this function to force delete previous Q, yurocTODO
+    u8* path_to_rm = alloc_printf("%s/p%x",out_dir_raw,id);
+    u8* command = alloc_printf("rm -rf %s/*",path_to_rm);
+    int status = system(command);    
+    ck_free(path_to_rm);
+    ck_free(command);
+    if(status == 1) PFATAL("removing folder %s failed",path_to_rm);
+
 }
 
 
@@ -7930,17 +7971,19 @@ void init_Q(){
 /* say we spotted new packets, we want to read the packet that right after the current fuzzing packet and fuzz it in the next round, for now, the testing program will write it to a fixed position, fuzzer can simply read from that position, but make it an argv anyway for future dev*/
 void proceed_fuzzing() { // here don't need Qid, just take the global Qid as current Qid.
 
-
     Qid_cur++;
+    proceed_times++;
     set_step();
 
     ACTF("Proceed Fuzzing! Now we are fuzzing packet %x\n",Qid_cur);
-    Qid_str_cur = alloc_printf("p%x",Qid_cur);
-    in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
-	u8* fn = alloc_printf("%s/packet",in_dir);
-    out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
 
+    multiQ[Qid_cur-1] = constructQ(Qid_cur);
+    store_Q(Qid_cur-1);
+    switch_to_Q(Qid_cur);
     setup_dirs_fds();
+
+	u8* fn=alloc_printf("%s/packet",in_dir);
+
 
     /*scan the src_path first to see if it exist*/
     if (access(fn,F_OK)!=0) PFATAL("The packet with Qid %x does not exist in %s\n", Qid_cur, fn);
@@ -7964,54 +8007,49 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
     if (!access(dfn, F_OK)) passed_det = 1;
     ck_free(dfn);
 
-
-    /*put into Q with Qid, but first check if this Q already exist, otherwise create it*/
-
-    if (!multiQ[Qid_cur-1]) {
-
-        multiQ[Qid_cur-1] = constructQ(Qid_cur);
-        store_Q(Qid_cur-1);
-        switch_to_Q(Qid_cur);
-
-        add_to_queue(fn, st.st_size, passed_det);
-        last_path_time = 0;
-        queued_at_start = 1;
-        queued_paths = 1;
-        queue_cur = queue;
-        pivot_inputs();
-    }
-
-    else{ // I think this branch will never be executed since old Q has been destroyed
-         PFATAL("This should not happen, old Q is destroyed\n");
-         store_Q(Qid_cur-1);
-         switch_to_Q(Qid_cur);
-         add_to_queue(fn, st.st_size, passed_det); // yurocTODO, maybe check if we need to add passed_det
-    }
+    add_to_queue(fn, st.st_size, passed_det);
+    last_path_time = 0;
+    queued_at_start = 1;
+    queued_paths = 1;
+    queue_cur = queue;
+    pivot_inputs();
+    ck_free(dfn);
+    ck_free(fn);
+    show_stats();
 
 }
 
 
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
-    
-	destroy_Q(Qid_cur);
+    regress_times++;
     Qid_cur--;
     set_step();
 	switch_to_Q(Qid_cur);
+	destroy_Q(Qid_cur+1);
+    show_stats();
     ACTF("Regress Fuzzing! Now we are fuzzing packet %x\n",Qid_cur);
-
 }
 
 
 
 /*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update c_cur if needed*/
 u8 has_new_packet(){
+
 // get c:
     u8 c_new = trace_bits[MAP_SIZE];
 // a simple checking
     if(c_new<c_min || c_new>c_max) PFATAL("current count of packets is out of range!\n");
+// if current c is 0, which is the inital value, then do not consider this as new packet
+    if(c_cur == 0){
+        c_cur = c_new;  
+        show_stats();
+        return 0;
+    }
+
     if(c_new > c_cur){
         c_cur = c_new;
+        show_stats();
         return 1;
        }
     return 0;
@@ -8070,6 +8108,7 @@ void dump_buf(u8* buf,u32 size,u8* dumptype)
     PFATAL("error when open file for writing!\n");
   }
   fclose(pFile);
+  ck_free(dump_path);
 
 }
 
@@ -8125,7 +8164,6 @@ int main(int argc, char** argv) {
 	  case 'p':
 		// yuroc
 		Qid_cur = optarg[0]-'0';
-		Qid_str_cur = alloc_printf("p%s",optarg);
 		
 		break;
       case 'M': { /* master sync ID */
@@ -8284,8 +8322,6 @@ int main(int argc, char** argv) {
     }
   //yuroc
 
-  in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
-  out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
   init_Q();
   if (optind == argc || !in_dir || !out_dir) usage(argv[0]);
 
