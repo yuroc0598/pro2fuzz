@@ -31,20 +31,6 @@
 
 /* User-facing macro to sprintf() to a dynamically allocated buffer. */
 
-#define my_sprintf(_str...) ({ \
-    u8* _tmp; \
-    s32 _len = snprintf(NULL, 0, _str); \
-    if (_len < 0) FATAL("Whoa, snprintf() fails?!"); \
-    _tmp = malloc(_len + 1); \
-    snprintf((char*)_tmp, _len + 1, _str); \
-    _tmp; \
-})
-
-#define my_free(_p) ({ \
-    if (_p) free(_p); \
-})
-
-
 #define alloc_printf(_str...) ({ \
     u8* _tmp; \
     s32 _len = snprintf(NULL, 0, _str); \

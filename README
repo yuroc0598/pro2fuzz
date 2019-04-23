@@ -73,6 +73,15 @@ Done:
 ISSUE:
 1) maybe_delete_dirs_fds does not do the job. the folder is not clean. need to force remove files or backup them then remove. the problem happens when try to remove Q2 when regressing fuzzing, but the out_dir related to Q2 is the currently active one, so there's a lock on it.
 
+2) problem with alloc_printf and ck_free when reallocate the Qid_str_cur and in_dir and out_dir: check where is in_dir alloced and freeed; debug line 1486, check if queue is created; pivot_input changed the mem before fn; the reason is that in pivot_input, the q->fname is ck_freed and points to the new file link in out_dir, which means that after pivot_input, the q->fname will be normal mem without ck buf, it also means that a q->fname should be initialized using ck_alloc.
+	- in switch_to_Q, simply put queue = Q->Qhead, will not work, later queue is assigned using malloc in add_to_queue, so Q->Qhead remains NULL.
+	- after proceed_fuzzing, we are in Q2, when go back to main, in the while loop, cull_queue is called, in mark_as_redundant, the fname of queue is corrupted, find out where is it changed in proceed_fuzzing: it's in show_stats in proceed_fuzzing,
+	- in switch_to_Q, if old>new, how to set resume: set te resume flag
+	- do we need to init queue_cur when construct Q and switch_to_Q; check where does queue_cur assigned in default AFL
+	- check what does find_start_position do, maybe copy this function into the main while loop
+	- need to write fuzzer_stats (to old) when switch from old to new, if new is larger than old; and maybe in switch_to_Q and store Q, backup Q-related coverage info
+	- check how is virgin_bits used, where is it updated, and maybe update it when regressing, if the information is lost. but looks like the virgin map info is always kept.
+
 
 TODO:
 1) shm is mapped twice, if the afl_area_ptr can be obtained from LLVM pass to source code, this can be avoided;
