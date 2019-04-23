@@ -90,3 +90,4 @@ TODO:
 4) check AFL_DONT_OPTIMIZE, unset this env var may cause AFL_CLANG_FAST to optimize bbs and bugs cannot be found
 5) in default AFL, compiler instruments each basic block, such that when one basic block executes, the bitmap is updated. It does not read values from the variables inside the TP.
 6) check bg, fg command that bring up the frozen process.
+7) remove the -O0 flag in makefile, make -O3
