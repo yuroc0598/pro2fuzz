@@ -22,7 +22,14 @@ commute: when c changes in TP, TP will increment the value of fixed fuzzing step
 
 Hands on:
 
-1) How is c used in fuzzer:
+
+
+Done:
+1) how to obtain addr of shm in TP, during instrumentation, afl-clang-fast already does the shmat. (Check where does the binary write bitmap, after that, write c?)
+  - why not use environment var?: no, env var are set before process starts and can only be seen by children
+  - read SHM_EVN_VAR, in TP, use shmat again, basically, map the shm twice. 
+
+2) How is c used in fuzzer:
     - add has_new_packet()
 	- fuzzer will send step value to shm every execute: when to change the value?
 
@@ -31,13 +38,13 @@ Hands on:
 		- TP: 1) every time write p1 to f_p1, p2 to f_p2; 2) read from shm, change the value of step; 3) for packets before "step", use the file p1, p2 to overwrite the generated packets, for the packet right on "step", use the fuzzed "input" file.
 
 
-2) when to use switch_to_Q() and proceed_fuzzing():
+3) when to use switch_to_Q() and proceed_fuzzing():
 	- how to jump out of current fuzzing and proceed: the function common_fuzz_stuff, will return 1 if it is time to bail out, so just ask it to bail out if has_new_packet. The label it will go to is abandon_entry. So we should return 2 if new packets are seen, then in the main while loop, deal with 2, call proceed_fuzzing to change target Q.
 
 
 
 
-3) Implement Q:
+4) Implement Q:
 
 	- what are those vars of queue that can be directly replaced with Q, and what are those need to use addition, or complete restore.
     - Make sure that switch_to_Q is called before add_to_Q, cz in add_to_Q, the globals are not checked, must be the globals from the right Q; also check when is the queue entry written to file in the dir "out_dir/queue", cz we need to do the same when reading the q2: It's in function pivot_inputs(), add it to the read_next_packet() when first switches to some Q;
@@ -51,29 +58,19 @@ Hands on:
 
 
 
-4) TP:
+5) TP:
 	- need to let TP fuzz according to the step value, e.g., if c is smaller than step, then just ask it to read from the packets written previously
 	- make the name of written packet the same, "packet", distinguish them by the folder they are in.
 
 
-5) back-track fuzzing
+6) back-track fuzzing
 	- when to stop current fuzzing step and back track?: when the new Q, say, Q2, has finished one or two circle? or when the tracebits have not changed for a long time
 	- how to do backtrack?  step value decreases by 2, save current Q, switch to lower Q,
 	- rethink the value of decrease and increase of step value again, suppose at first we only have c=2, then next time c=4; or from c=2 then c=3, how to determine the change of step value: set a min(1) and max(6) value for c, then check it in has_new_packet.
 
+7) maybe_delete_dirs_fds does not do the job. the folder is not clean. need to force remove files or backup them then remove. the problem happens when try to remove Q2 when regressing fuzzing, but the out_dir related to Q2 is the currently active one, so there's a lock on it.
 
-
-Done:
-1) how to obtain addr of shm in TP, during instrumentation, afl-clang-fast already does the shmat. (Check where does the binary write bitmap, after that, write c?)
-  - why not use environment var?: no, env var are set before process starts and can only be seen by children
-  - read SHM_EVN_VAR, in TP, use shmat again, basically, map the shm twice. 
-
-
-
-ISSUE:
-1) maybe_delete_dirs_fds does not do the job. the folder is not clean. need to force remove files or backup them then remove. the problem happens when try to remove Q2 when regressing fuzzing, but the out_dir related to Q2 is the currently active one, so there's a lock on it.
-
-2) problem with alloc_printf and ck_free when reallocate the Qid_str_cur and in_dir and out_dir: check where is in_dir alloced and freeed; debug line 1486, check if queue is created; pivot_input changed the mem before fn; the reason is that in pivot_input, the q->fname is ck_freed and points to the new file link in out_dir, which means that after pivot_input, the q->fname will be normal mem without ck buf, it also means that a q->fname should be initialized using ck_alloc.
+8) problem with alloc_printf and ck_free when reallocate the Qid_str_cur and in_dir and out_dir: check where is in_dir alloced and freeed; debug line 1486, check if queue is created; pivot_input changed the mem before fn; the reason is that in pivot_input, the q->fname is ck_freed and points to the new file link in out_dir, which means that after pivot_input, the q->fname will be normal mem without ck buf, it also means that a q->fname should be initialized using ck_alloc.
 	- in switch_to_Q, simply put queue = Q->Qhead, will not work, later queue is assigned using malloc in add_to_queue, so Q->Qhead remains NULL.
 	- after proceed_fuzzing, we are in Q2, when go back to main, in the while loop, cull_queue is called, in mark_as_redundant, the fname of queue is corrupted, find out where is it changed in proceed_fuzzing: it's in show_stats in proceed_fuzzing,
 	- in switch_to_Q, if old>new, how to set resume: set te resume flag
@@ -81,6 +78,18 @@ ISSUE:
 	- check what does find_start_position do, maybe copy this function into the main while loop
 	- need to write fuzzer_stats (to old) when switch from old to new, if new is larger than old; and maybe in switch_to_Q and store Q, backup Q-related coverage info
 	- check how is virgin_bits used, where is it updated, and maybe update it when regressing, if the information is lost. but looks like the virgin map info is always kept.
+
+
+
+ISSUE:
+
+1) why the time of fuzzing Q2 is so quick, need to debug queue cycle or something
+2) maybe also put has_new_packet into calibrate_case, to init the c_cur value, otherwise it's always 0
+3) after proceed_fuzzing, the next queue fname is corrupted
+4) maybe make queue->favored = 1 for newly proceeded entries, in proceed_fuzzing, read testcase , add to queue
+5) check where is queue->favored updated, top_rated is initialized when perform_dry_run -> calibrate_case -> update_bitmap_score, then in cull_queue, 
+6) maybe after proceed_fuzz, we need to perform_dry_run or calibrate_case, otherwise, the program is still in Q1 mode, top_rated is empty, so the favored is always 0, a simple update_bitmap_score after proceed_fuzzing is not enough since update_bitmap_score will use the current trace_bits info.
+7) break fuzz_one then debug, bug in mark_as_det_done, still fname is corrupted and strrchr return null.
 
 
 TODO:

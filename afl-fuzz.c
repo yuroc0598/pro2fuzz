@@ -2656,6 +2656,10 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
 
     fault = run_target(argv, use_tmout);
 
+
+	/*yurocTODO: comment for debugging, need to uncomment later*/
+	//has_new_packet(); 
+
     /* stop_soon is set by the handler for Ctrl+C. When it's pressed,
        we want to bail out quickly. */
 
@@ -6709,9 +6713,7 @@ abandon_entry:
   if(ret_common_fuzz==2){
       /*new packets are seen*/
             ret_val = 2;
-      return ret_val; //yurocTODO: check what does this ret_val do
-  }
-  else{
+	}
   
        splicing_with = -1;
     
@@ -6734,7 +6736,6 @@ abandon_entry:
     
       return ret_val;
 
-   }
      #undef FLIP_BIT
 }
 
@@ -8006,10 +8007,11 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
     ck_free(dfn);
 
     add_to_queue(fn, st.st_size, passed_det);
+	//yurocMaybe
+	//queue->favored = 1;
     last_path_time = 0;
     queued_at_start = 1;
     queued_paths = 1;
-    queue_cur = queue;
     pivot_inputs();// after this, fn is normal buf without ck buf, cannot do ck_free on fn, it has already been ck_freed and reassigned
     ck_free(dfn);
     //ck_free(fn); // yurocTODO: do not free fn since q->name is the same pointer pointing to the file name,
@@ -8482,6 +8484,9 @@ int main(int argc, char** argv) {
         
     if(skipped_fuzz==2){
          proceed_fuzzing();
+		//yurocMaybe: delete this and just make new Q favored = 1, if so, still need to update top_rated
+  		 perform_dry_run(use_argv);
+		 continue;
          //PFATAL("now proceed fuzz, Qid is %x",Qid_cur);
     }
     
