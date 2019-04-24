@@ -44,7 +44,6 @@ int read_packet(int c,unsigned char* buf){
 int main(int argc, char **argv)
 {
 	int r;
-	u8* shmptr = NULL;
 	u8 c, step;
 	unsigned char buf[4096];
 	const char ifi[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/input";
@@ -62,15 +61,9 @@ int main(int argc, char **argv)
 
 	step = 1; 
 #ifdef __AFL_HAVE_MANUAL_CONTROL
-	char* res = getenv("__AFL_SHM_ID");
-	if(!res){
-		printf("get env var failed, use default step value!\n");
-	}
-	else{
-		int shmid = atoi(res);
-		shmptr = shmat(shmid,NULL,0);
+		int shmid = atoi(getenv("__AFL_SHM_ID"));
+		u8* shmptr = shmat(shmid,NULL,0);
     	step = shmptr[MAP_SIZE];
-	}
    #endif
 
 	SSL_library_init();
