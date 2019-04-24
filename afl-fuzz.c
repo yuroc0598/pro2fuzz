@@ -352,7 +352,7 @@ double avg_exec_multiQ,
 	   stab_ratio_multiQ;
 
 const u32 proceed_mod = 80;
-u8 proceed_bar[3] = {72,60,40};
+u8 proceed_bar[3] = {60,50,30};
 u32 num_paths[4]={0,0,0,0};
 
 
