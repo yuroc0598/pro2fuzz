@@ -22,13 +22,7 @@ commute: when c changes in TP, TP will increment the value of fixed fuzzing step
 
 Hands on:
 
-
-
-
-
-
-
-
+*) the logic of testing openssl.c is wrong.
 
 
 
@@ -51,6 +45,8 @@ Done:
 
 3) when to use switch_to_Q() and proceed_fuzzing():
 	- how to jump out of current fuzzing and proceed: the function common_fuzz_stuff, will return 1 if it is time to bail out, so just ask it to bail out if has_new_packet. The label it will go to is abandon_entry. So we should return 2 if new packets are seen, then in the main while loop, deal with 2, call proceed_fuzzing to change target Q.
+
+4) our resume is different from AFL resume, AFL resume take old output queue as input and start all new fuzzing, our resume is in memory resume, directly start from where it pauses. So we dont need to find_start_position, the problem is set up dir? maybe dont need to set up dir
 
 
 
@@ -89,6 +85,17 @@ Done:
 	- check what does find_start_position do, maybe copy this function into the main while loop
 	- need to write fuzzer_stats (to old) when switch from old to new, if new is larger than old; and maybe in switch_to_Q and store Q, backup Q-related coverage info
 	- check how is virgin_bits used, where is it updated, and maybe update it when regressing, if the information is lost. but looks like the virgin map info is always kept.
+
+1) after one round of proceed and regress, it's hard to proceed again since the c_cur already reaches max value. So, now and then, force proceed when there is new bits, regardless of the result of has_new_packets. Put this logic into main loop or into has_new_packet, force it return 2 at some point.
+2) looks like we still have to remove the lock on Q2 when regress, impl it in destroy Q,
+3) do we need to change out_dir_fd, everytime? we need to call a function similar to setup_dirs_fds in switch_to_Q when regress, because out_dir_fd still points to Q2 and other stuff also such as plot_file
+4) check when is fuzzer_stats updated, fuzz_bitmap updated, and how can we reuse them when regress to Q1 when they are already there.
+	
+5) bug when proceed again, problem is malloc does not zero memory, and free does not zero memory. So the previous still exist
+6) do we need to ck_free Qhead before we ck_free Q??? yes, implement recursive free
+
+
+
 
 
 

@@ -335,13 +335,15 @@ u8 has_new_packet();
 void dump_buf(u8*,u32,u8*);
 void set_step();
 void proceed_fuzzing();
-static u8  c_cur=0;                  /* c value, shared with TP          */
+u8  c_cur_max=1;                  /* c value,  shared with TP          */
+u8  c_new = 1;
+const u8 c_min = 1;
+const u8 c_max = 4;
+
 static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur;
 static u8* Qid_str_cur;
-const u8 Q_max_cycle=2;
-const u8 c_min = 1;
-const u8 c_max = 6;
+const u8 Q_max_cycle=10;
 u8 proceed_times,
    regress_times;
 
@@ -349,6 +351,9 @@ double avg_exec_multiQ,
 	   t_byte_ratio_multiQ,
 	   stab_ratio_multiQ;
 
+const u32 proceed_mod = 80;
+u8 proceed_bar[3] = {72,60,40};
+u32 num_paths[4]={0,0,0,0};
 
 
 struct Q
@@ -1488,7 +1493,6 @@ static void read_testcases(void) {
   fn = alloc_printf("%s/queue", in_dir);
   if (!access(fn, F_OK)){
 	in_dir = fn;
-    PFATAL("why non-in-place resumption\n");
   } 
   else ck_free(fn);
 
@@ -3773,8 +3777,7 @@ static void maybe_delete_out_dir(void) {
 
     u8* orig_q = alloc_printf("%s/queue", out_dir);
 
-    in_dir = alloc_printf("%s/_resume", out_dir);
-	//PFATAL("why in place resume\n");
+    in_dir = alloc_printf("%s/_resume", out_dir); //yurocADD:when regressing, in_dir is already alloced, need to free
 
     rename(orig_q, in_dir); /* Ignore errors */
 
@@ -4157,8 +4160,13 @@ static void show_stats(void) {
 
   }
 
-  SAYF(bSTG bV bSTOP "  total paths : " cRST "%-5s  " bSTG bV "\n",
-       DI(queued_paths));
+  
+
+  /*yurocAdd*/
+  num_paths[Qid_cur-1] = queued_paths;
+
+  SAYF(bSTG bV bSTOP "Q paths: " cRST "%-2s/%-2s/%-2s/%-2s" bSTG bV "\n",
+       DI(num_paths[0]),DI(num_paths[1]),DI(num_paths[2]),DI(num_paths[3]));
 
   /* Highlight crashes in red if found, denote going over the KEEP_UNIQUE_CRASH
      limit with a '+' appended to the count. */
@@ -4178,8 +4186,9 @@ static void show_stats(void) {
        "   uniq hangs : " cRST "%-6s " bSTG bV "\n",
        DTD(cur_ms, last_hang_time), tmp);
 
-  SAYF(bV bSTOP "max #packets: " cRST "% x        " bSTG bSTOP "cur fuzzing: " cRST "%x         " bSTG bSTOP"#proceed: " cRST
-		  "%x         "bSTG bSTOP "#regress: " cRST "%x " bSTG bV"\n", c_cur, Qid_cur, proceed_times,regress_times);
+  SAYF(bV bSTOP "max #packets: " cRST "%x  " bSTG bSTOP "cur #packets: " cRST "%x  " bSTG bSTOP "cur fuzzing: " 
+		  cRST "%x    " bSTG bSTOP"#proceed: " cRST "%x    "bSTG bSTOP "#regress: " cRST "%x" bSTG bV bSTOP"\n", 
+		  c_cur_max,c_new, Qid_cur, proceed_times,regress_times);
 
 
   SAYF(bVR bH bSTOP cCYA " cycle progress " bSTG bH20 bHB bH bSTOP cCYA
@@ -6714,7 +6723,13 @@ retry_splicing:
 #endif /* !IGNORE_FINDS */
 
   ret_val = 0;
-
+//  /*yurocRemove: for debugging, force regression*/
+//  if(Qid_cur>1){
+//  	queue_cycle = 20;
+//	queue_cur->next = NULL;
+//	return 1;
+//  }
+//  /*end yurocRemove*/
 abandon_entry:
 
   if(ret_common_fuzz==2){
@@ -7836,7 +7851,30 @@ void copy_top_rated(struct queue_entry** src, struct queue_entry** dst){
 
 }
 
+void close_fds(){
+	int status = flock(out_dir_fd,LOCK_UN | LOCK_NB);
+	if(status) PFATAL("In close_fds, releasing lock %s failed",out_dir);
+	close(out_dir_fd);
+	fclose(plot_file);
+}
 
+void reassign_fds(){
+
+    out_dir_fd = open(out_dir, O_RDONLY);
+	if (out_dir_fd < 0 || flock(out_dir_fd, LOCK_EX | LOCK_NB))
+    	PFATAL("in reassign_fds,unable to flock() output directory.");
+
+	u8* tmp = alloc_printf("%s/plot_data", out_dir);
+    int fd = open(tmp, O_WRONLY | O_APPEND, 0600);
+	/*since the file is already there, you have to seek*/
+	if (fd < 0) PFATAL("in reassign fds, unable to create '%s'", tmp);
+	ck_free(tmp);
+	plot_file = fdopen(fd, "w");
+	if (!plot_file) PFATAL("in reassign_fds, fdopen() failed");
+
+
+
+}
 
 /*
 switch to Q with Qid, the idea is to use the struct member of Q with Qid to replace the current global queue variables\
@@ -7844,7 +7882,17 @@ This is basically the member of struct Q, note that some of them can be directly
 */
 
 
+void free_Q(struct Q* this){
 
+	struct queue_entry* ant = this->Qhead;
+	while(this->Qhead){
+		this->Qhead = this->Qhead->next;
+		ck_free(ant);
+		ant = this->Qhead;
+	}
+	memset(this->Q_top_rated,0,MAP_SIZE * sizeof(struct queue_entry*));
+	ck_free(this);
+}
 
 
 void switch_to_Q(u8 old,u8 new){ // when this is called, Qid_cur is already new
@@ -7890,17 +7938,19 @@ void switch_to_Q(u8 old,u8 new){ // when this is called, Qid_cur is already new
 		Qid_str_cur[1]++;
 		in_dir[68]++;
 		out_dir[69]++;
-		in_place_resume = 0;
+		//in_place_resume = 0;
+		//resuming_fuzz = 0;
+		setup_dirs_fds();
 
 	}
 	else{
 		Qid_str_cur[1]--;
 		in_dir[68]--;
 		out_dir[69]--;
-		in_place_resume = 1;
+		//in_place_resume = 1;
+		//resuming_fuzz = 1;
 	}
 
-	setup_dirs_fds();
 }
 
 
@@ -7910,6 +7960,7 @@ void switch_to_Q(u8 old,u8 new){ // when this is called, Qid_cur is already new
 
 void store_Q() {
 
+	close_fds();
 	// store global vars from queue to Q
 	struct Q* curQ = multiQ[Qid_cur-1];
 	curQ->Q_cycle = queue_cycle;
@@ -7936,7 +7987,7 @@ void store_Q() {
 	curQ->Q_prev100 = q_prev100;
     copy_top_rated(top_rated,curQ->Q_top_rated);
 	show_stats();
-    write_stats_file(t_byte_ratio_multiQ, stab_ratio_multiQ, avg_exec_multiQ); 
+    write_stats_file(t_byte_ratio_multiQ, stab_ratio_multiQ, avg_exec_multiQ); //yurocAdd
 
 }
 
@@ -7947,14 +7998,18 @@ void store_Q() {
 /*construct Q*/
 
 struct Q* constructQ(){
-    struct Q* newQ  = malloc(sizeof(struct Q));
+    struct Q* newQ  = ck_alloc(sizeof(struct Q));
     newQ->Q_havoc_div = 1;
     return newQ;
 }
 
 void destroy_Q(u8 id){
-	free(multiQ[id-1]);
-    multiQ[id-1] = NULL;
+	close_fds();
+	/*need to free members of Q first*/
+
+	free_Q(multiQ[id-1]); 
+	//multiQ[id-1] = NULL;
+	/*release the lock on Q id*/
     //maybe_delete_out_dir(); 
 	//I use syscmd rm to remove Q2 for now when regressing, maybe use maybe_delete_out_dir, yurocCheck
     u8* path_to_rm = alloc_printf("%s/p%x",out_dir_raw,id);
@@ -8029,43 +8084,52 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
     queued_paths = 1;
     pivot_inputs();// after this, fn points to another mem, to the file in out_dir/queue, and the previous one has been ck_freed
     show_stats();
-
 }
 
 
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
+
+	destroy_Q(Qid_cur);
     regress_times++;
     Qid_cur--;
     set_step();
 	show_stats();
 	switch_to_Q(Qid_cur+1,Qid_cur);
-	destroy_Q(Qid_cur+1);
+	reassign_fds();
 }
 
 
 
-/*has_new_packet will return 0 if there is no new packet, 1 if c increases, 2 if c decreases, and update c_cur if needed*/
+/*has_new_packet will return 0 if there is no new packet or packet number decreases, 1 if c increases, and update c_cur_max if needed. also, if */
 u8 has_new_packet(){
 
 // get c:
-    u8 c_new = trace_bits[MAP_SIZE];
+    c_new = trace_bits[MAP_SIZE];
+
 // a simple checking
     if(c_new<c_min || c_new>c_max) PFATAL("current count of packets is out of range!\n");
 
+	if(c_new < c_cur_max) return 0;
 
 // if we are in calibration or trim stage, then do not consider new packets
-	if(strcmp(stage_name,"calibration")==0 || strcmp(stage_name,"trim")==0 || strcmp(stage_name,"init")==0 || c_cur==0){
-		if(c_new>c_cur) c_cur = c_new;
+	if(strcmp(stage_name,"calibration")==0 || strcmp(stage_name,"trim")==0 || strcmp(stage_name,"init")==0 || c_cur_max==1){
+		if(c_new>c_cur_max) c_cur_max = c_new;
 		return 0;
 	}
 
-    if(c_new > c_cur){
-        c_cur = c_new;
+    if(c_new > c_cur_max){
+        c_cur_max = c_new;
         show_stats();
         return 1;
     }
 
+	/*now c_new == c_cur_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
+
+	if((random()%proceed_mod>proceed_bar[Qid_cur-1]) && Qid_cur<c_max){ //yurocTODO: add rand stuff, give a ratio as global,
+		show_stats();
+		return 1;
+	}
     show_stats();
     return 0;
 }
@@ -8421,7 +8485,7 @@ int main(int argc, char** argv) {
 
   show_init_stats();
 
-  //seek_to = find_start_position();
+  seek_to = find_start_position();
 
   write_stats_file(0, 0, 0);
   save_auto();
@@ -8440,7 +8504,7 @@ int main(int argc, char** argv) {
   while (1) {
 
 
-  	seek_to = find_start_position();
+  	//seek_to = find_start_position();
     u8 skipped_fuzz;
 
     cull_queue();
