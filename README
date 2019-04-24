@@ -24,6 +24,17 @@ Hands on:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 Done:
 1) how to obtain addr of shm in TP, during instrumentation, afl-clang-fast already does the shmat. (Check where does the binary write bitmap, after that, write c?)
   - why not use environment var?: no, env var are set before process starts and can only be seen by children
@@ -83,13 +94,9 @@ Done:
 
 ISSUE:
 
-1) why the time of fuzzing Q2 is so quick, need to debug queue cycle or something
-2) maybe also put has_new_packet into calibrate_case, to init the c_cur value, otherwise it's always 0
-3) after proceed_fuzzing, the next queue fname is corrupted
-4) maybe make queue->favored = 1 for newly proceeded entries, in proceed_fuzzing, read testcase , add to queue
-5) check where is queue->favored updated, top_rated is initialized when perform_dry_run -> calibrate_case -> update_bitmap_score, then in cull_queue, 
-6) maybe after proceed_fuzz, we need to perform_dry_run or calibrate_case, otherwise, the program is still in Q1 mode, top_rated is empty, so the favored is always 0, a simple update_bitmap_score after proceed_fuzzing is not enough since update_bitmap_score will use the current trace_bits info.
-7) break fuzz_one then debug, bug in mark_as_det_done, still fname is corrupted and strrchr return null.
+1) The real question is, what should be the initial value of c_cur, if 0, apparently no, if has_new_packet() in calibrate, then c_cur is already 4, hard to proceed.
+
+
 
 
 TODO:

@@ -94,7 +94,7 @@ EXP_ST u8 *in_dir,                    /* Input directory with test cases  */
           *orig_cmdline;              /* Original command line            */
 
 EXP_ST u32 exec_tmout = EXEC_TIMEOUT; /* Configurable exec timeout (ms)   */
-static u32 hang_tmout = EXEC_TIMEOUT; /* Timeout used for hang det (ms)   */
+static u32 hang_tmout = EXEC_TIMEOUT; /* Timeout use dndtabfor han gndtabdet (ms)   */
 
 EXP_ST u64 mem_limit  = MEM_LIMIT;    /* Memory cap for child (MB)        */
 
@@ -350,6 +350,7 @@ double avg_exec_multiQ,
 	   stab_ratio_multiQ;
 
 
+
 struct Q
 {
 
@@ -387,8 +388,6 @@ struct queue_entry *Q_top_rated[MAP_SIZE];
 
 
 struct Q* multiQ[8]; // init 8 Qs for now
-
-
 
 /* ------------------------------------^ end globals for pro2fuzz------------------------------------------*/
 
@@ -1489,7 +1488,7 @@ static void read_testcases(void) {
   fn = alloc_printf("%s/queue", in_dir);
   if (!access(fn, F_OK)){
 	in_dir = fn;
-    PFATAL("why resumption\n");
+    PFATAL("why non-in-place resumption\n");
   } 
   else ck_free(fn);
 
@@ -2656,9 +2655,9 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
 
     fault = run_target(argv, use_tmout);
 
-
-	/*yurocTODO: comment for debugging, need to uncomment later*/
-	//has_new_packet(); 
+	/*I put this here so that the init c can be larger than 0, if something wrong happens, check here*/
+	/*yurocCheck*/
+	has_new_packet(); 
 
     /* stop_soon is set by the handler for Ctrl+C. When it's pressed,
        we want to bail out quickly. */
@@ -3201,7 +3200,7 @@ static void write_crash_readme(void) {
 
 static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
-  u8  *fn = "";
+  u8  *fn;
   u8  hnb;
   s32 fd;
   u8  keeping = 0, res;
@@ -3218,8 +3217,7 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
 
 #ifndef SIMPLE_FILES
 
-    fn = alloc_printf("%s/queue/id:%06u,%s", out_dir, queued_paths,
-                      describe_op(hnb));
+    fn = alloc_printf("%s/queue/id:%06u,%s", out_dir, queued_paths,describe_op(hnb));
 
 #else
 
@@ -3776,7 +3774,7 @@ static void maybe_delete_out_dir(void) {
     u8* orig_q = alloc_printf("%s/queue", out_dir);
 
     in_dir = alloc_printf("%s/_resume", out_dir);
-	PFATAL("why in place resume\n");
+	//PFATAL("why in place resume\n");
 
     rename(orig_q, in_dir); /* Ignore errors */
 
@@ -3953,6 +3951,8 @@ static void check_term_size(void);
 /* A spiffy retro stats screen! This is called every stats_update_freq
    execve() calls, plus in several other circumstances. */
 
+
+
 static void show_stats(void) {
 
   static u64 last_stats_ms, last_plot_ms, last_ms, last_execs;
@@ -4050,8 +4050,8 @@ static void show_stats(void) {
 
   t_bits = (MAP_SIZE << 3) - count_bits(virgin_bits);
 
-  /*yuroc: update the global stats for storing a Q*/
 
+  /*yurocAdd:*/
   avg_exec_multiQ = avg_exec;
   t_byte_ratio_multiQ = t_byte_ratio;
   stab_ratio_multiQ = stab_ratio;
@@ -4086,7 +4086,7 @@ static void show_stats(void) {
 
   sprintf(tmp + banner_pad, "%s " cLCY VERSION cLGN
           " (%s)",  crash_mode ? cPIN "peruvian were-rabbit" : 
-          cYEL "profuzz", use_banner);
+          cYEL "Pro2Fuzz", use_banner);
 
   SAYF("\n%s\n\n", tmp);
 
@@ -4133,7 +4133,7 @@ static void show_stats(void) {
   SAYF(bV bSTOP "        run time : " cRST "%-34s " bSTG bV bSTOP
        "  cycles done : %s%-5s  " bSTG bV "\n",
        DTD(cur_ms, start_time), tmp, DI(queue_cycle - 1));
-  SAYF(bV bSTOP "cur packet count:" cRST "%x" bSTG bV bSTOP "cur STEP:%x" bSTG bV bSTOP "proceed times:%x" bSTG bV bSTOP "regress times:%x"bSTG bV "\n",c_cur,Qid_cur,proceed_times,regress_times);
+
   /* We want to warn people about not seeing new paths after a full cycle,
      except when resuming fuzzing or running in non-instrumented mode. */
 
@@ -4177,6 +4177,10 @@ static void show_stats(void) {
   SAYF(bV bSTOP "  last uniq hang : " cRST "%-34s " bSTG bV bSTOP 
        "   uniq hangs : " cRST "%-6s " bSTG bV "\n",
        DTD(cur_ms, last_hang_time), tmp);
+
+  SAYF(bV bSTOP "max #packets: " cRST "% x        " bSTG bSTOP "cur fuzzing: " cRST "%x         " bSTG bSTOP"#proceed: " cRST
+		  "%x         "bSTG bSTOP "#regress: " cRST "%x " bSTG bV"\n", c_cur, Qid_cur, proceed_times,regress_times);
+
 
   SAYF(bVR bH bSTOP cCYA " cycle progress " bSTG bH20 bHB bH bSTOP cCYA
        " map coverage " bSTG bH bHT bH20 bH2 bH bVL "\n");
@@ -4426,6 +4430,9 @@ static void show_stats(void) {
   fflush(0);
 
 }
+
+
+
 
 
 /* Display quick statistics at the end of processing the input directory,
@@ -7870,24 +7877,30 @@ void switch_to_Q(u8 old,u8 new){ // when this is called, Qid_cur is already new
 	q_prev100 = curQ->Q_prev100;
 	copy_top_rated(curQ->Q_top_rated,top_rated);
 	// change dirs
+	/*
     ck_free(Qid_str_cur);
     ck_free(in_dir);
     ck_free(out_dir);
     Qid_str_cur = alloc_printf("p%x",new);
     in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
     out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
-
+	*/
 
 	if(new>old){
-		setup_dirs_fds();
+		Qid_str_cur[1]++;
+		in_dir[68]++;
+		out_dir[69]++;
 		in_place_resume = 0;
 
 	}
 	else{
-		// yurocTODO: since we are going back, how to set resume flag
+		Qid_str_cur[1]--;
+		in_dir[68]--;
+		out_dir[69]--;
 		in_place_resume = 1;
 	}
 
+	setup_dirs_fds();
 }
 
 
@@ -7922,7 +7935,6 @@ void store_Q() {
 	curQ->Q_top = queue_top;
 	curQ->Q_prev100 = q_prev100;
     copy_top_rated(top_rated,curQ->Q_top_rated);
-	//yurocTODO: need to write fuzzer stats to old Q using write_stats(), so this should be called before change Qid
 	show_stats();
     write_stats_file(t_byte_ratio_multiQ, stab_ratio_multiQ, avg_exec_multiQ); 
 
@@ -7941,11 +7953,10 @@ struct Q* constructQ(){
 }
 
 void destroy_Q(u8 id){
-// yurocTODO: destroy Q
 	free(multiQ[id-1]);
     multiQ[id-1] = NULL;
-    //maybe remove the out dir
-    //maybe_delete_out_dir(); // replace this function to force delete previous Q, yurocTODO
+    //maybe_delete_out_dir(); 
+	//I use syscmd rm to remove Q2 for now when regressing, maybe use maybe_delete_out_dir, yurocCheck
     u8* path_to_rm = alloc_printf("%s/p%x",out_dir_raw,id);
     u8* command = alloc_printf("rm -rf %s/*",path_to_rm);
     int status = system(command);    
@@ -7964,7 +7975,13 @@ void init_Q(){
     if(Qid_cur!=1) PFATAL("Qid_cur is not 1 when init Q, something is wrong\n");
 
     multiQ[0]=constructQ();
-    switch_to_Q(0,1);
+    //switch_to_Q(0,1);
+    Qid_str_cur = alloc_printf("p%x",Qid_cur);
+    in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
+    out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
+	setup_dirs_fds();
+
+
 }
 
 
@@ -8007,14 +8024,10 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
     ck_free(dfn);
 
     add_to_queue(fn, st.st_size, passed_det);
-	//yurocMaybe
-	//queue->favored = 1;
     last_path_time = 0;
     queued_at_start = 1;
     queued_paths = 1;
-    pivot_inputs();// after this, fn is normal buf without ck buf, cannot do ck_free on fn, it has already been ck_freed and reassigned
-    ck_free(dfn);
-    //ck_free(fn); // yurocTODO: do not free fn since q->name is the same pointer pointing to the file name,
+    pivot_inputs();// after this, fn points to another mem, to the file in out_dir/queue, and the previous one has been ck_freed
     show_stats();
 
 }
@@ -8022,7 +8035,6 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
 
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
-	//yurocTODO: need to merge virgin bits, use count_non255_bytes
     regress_times++;
     Qid_cur--;
     set_step();
@@ -8044,10 +8056,8 @@ u8 has_new_packet(){
 
 // if we are in calibration or trim stage, then do not consider new packets
 	if(strcmp(stage_name,"calibration")==0 || strcmp(stage_name,"trim")==0 || strcmp(stage_name,"init")==0 || c_cur==0){
-		c_cur = c_new;
-		show_stats();
+		if(c_new>c_cur) c_cur = c_new;
 		return 0;
-
 	}
 
     if(c_new > c_cur){
@@ -8055,6 +8065,8 @@ u8 has_new_packet(){
         show_stats();
         return 1;
     }
+
+    show_stats();
     return 0;
 }
 
@@ -8382,7 +8394,6 @@ int main(int argc, char** argv) {
   setup_post();
   setup_shm();
   init_count_class16();
-  //setup_dirs_fds(); //yurocTODO: maybe rethink later, avoid duplicate when init when initQ
 
   if (!timeout_given) find_timeout();
   detect_file_args(argv + optind + 1);
@@ -8437,7 +8448,6 @@ int main(int argc, char** argv) {
     if (!queue_cur) {
 
       queue_cycle++;
-	  //yurocTODO: if queue_cycle is larger than 2 and step is larger than 1, decrease step, if step is one, do nothing
 
 	  if(queue_cycle>Q_max_cycle && Qid_cur>1){
 
@@ -8503,7 +8513,7 @@ int main(int argc, char** argv) {
 
     if (stop_soon) break;
 
-    queue_cur = queue_cur->next; // yurocTODO: debug, SIGSEGV
+    queue_cur = queue_cur->next; 
     current_entry++;
 
   }

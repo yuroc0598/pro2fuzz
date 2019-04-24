@@ -43,7 +43,7 @@ else
   TEST_CC   = afl-clang
 endif
 
-COMM_HDR    = alloc-inl.h config.h debug.h types.h pro2fuzz.h
+COMM_HDR    = alloc-inl.h config.h debug.h types.h 
 
 all: test_x86 $(PROGS) afl-as test_build fast all_done
 
