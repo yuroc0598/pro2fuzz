@@ -120,6 +120,7 @@ clean:
 	$(MAKE) -C libdislocator clean
 	$(MAKE) -C libtokencap clean
 	cd ./llvm_mode/ && $(MAKE) clean
+	cd ./testcases/openssl/ && rm -rf out/p*/*
 
 install: all
 	mkdir -p -m 755 $${DESTDIR}$(BIN_PATH) $${DESTDIR}$(HELPER_PATH) $${DESTDIR}$(DOC_PATH) $${DESTDIR}$(MISC_PATH)
