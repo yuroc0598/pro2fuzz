@@ -27,9 +27,16 @@ Hands on:
 
 
 
-
-
 Done:
+
+
+*) maybe update the bitmap priority policy, the packet that generate larger c value get more air time. check where is update_bitmap_score used: I add save_if_interesting into the new packet branch in common_fuzz_stuff, so that when new packets come, it won't directly jump to main loop to proceed, but will save the current testcase if favored. maybe add more weight on the perf score it has? something like invoke_new_packet(). I add the member invoke_new_packet to each queue entry, then update the value in has_new_packet, then cal the perf score in calculate score, make them the max value of havoc time.
+
+*) maybe need to change the timing policy here, otherwise will AFL consider proceed fuzzing time as the time of the last testcase?: check how is the time for each execution measured: exec time is only calculated in calibrate_case, that's why it's called calibrated case. In this case, we dont have to worry about the air time, cali case will be called every time save_if_intere, so won't be affected by proceed. hopefully.
+
+
+
+
 1) how to obtain addr of shm in TP, during instrumentation, afl-clang-fast already does the shmat. (Check where does the binary write bitmap, after that, write c?)
   - why not use environment var?: no, env var are set before process starts and can only be seen by children
   - read SHM_EVN_VAR, in TP, use shmat again, basically, map the shm twice. 

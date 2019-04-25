@@ -237,7 +237,8 @@ struct queue_entry {
       has_new_cov,                    /* Triggers new coverage?           */
       var_behavior,                   /* Variable behavior?               */
       favored,                        /* Currently favored?               */
-      fs_redundant;                   /* Marked as redundant in the fs?   */
+      fs_redundant,                   /* Marked as redundant in the fs?   */
+	  invoke_new_packet;              /* this packet invoke new packet flights*/
 
   u32 bitmap_size,                    /* Number of bits set in bitmap     */
       exec_cksum;                     /* Checksum of the execution trace  */
@@ -343,7 +344,7 @@ const u8 c_max = 4;
 static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur;
 static u8* Qid_str_cur;
-const u8 Q_max_cycle=10;
+const u8 Q_max_cycle=4;
 u8 proceed_times,
    regress_times;
 
@@ -351,8 +352,8 @@ double avg_exec_multiQ,
 	   t_byte_ratio_multiQ,
 	   stab_ratio_multiQ;
 
-const u32 proceed_mod = 80;
-u8 proceed_bar[3] = {60,50,30};
+const u8 proceed_mod = 80;
+u8 proceed_bar[4] = {60,50,30,80};
 u32 num_paths[4]={0,0,0,0};
 
 
@@ -2661,7 +2662,7 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
 
 	/*I put this here so that the init c can be larger than 0, if something wrong happens, check here*/
 	/*yurocCheck*/
-	has_new_packet(); 
+	//has_new_packet(); 
 
     /* stop_soon is set by the handler for Ctrl+C. When it's pressed,
        we want to bail out quickly. */
@@ -4712,10 +4713,17 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
 
   /*yuroc: if new packets are seen, then return 2, then in fuzz_one, goto abandon_entry, check if it is 2, if 2, then proceed_fuzzing*/
-  if(has_new_packet()== 1){
+  u8 hnp = has_new_packet();
+  if(hnp > 0){
     /*maybe do something else for stats
     */
+	if(hnp == 1) queue_cur->invoke_new_packet = 1;
     ret_common_fuzz = 2;
+    queued_discovered += save_if_interesting(argv, out_buf, len, fault);
+
+    if (!(stage_cur % stats_update_freq) || stage_cur + 1 == stage_max)
+      show_stats();
+
     return 2;
   }
 
@@ -4867,8 +4875,8 @@ static u32 calculate_score(struct queue_entry* q) {
   }
 
   /* Make sure that we don't go over limit. */
-
-  if (perf_score > HAVOC_MAX_MULT * 100) perf_score = HAVOC_MAX_MULT * 100;
+  /*yurocAdd*/
+  if (perf_score > HAVOC_MAX_MULT * 100 || q->invoke_new_packet) perf_score = HAVOC_MAX_MULT * 100;
 
   return perf_score;
 
@@ -5172,6 +5180,8 @@ static u8 fuzz_one(char** argv) {
   /************
    * TRIMMING *
    ************/
+
+  /*yurocRemove
   if (!dumb_mode && !queue_cur->trim_done) {
 
     u8 res = trim_case(argv, queue_cur, in_buf);
@@ -5191,6 +5201,9 @@ static u8 fuzz_one(char** argv) {
 
   }
 
+ yurocRemove*/
+
+  queue_cur->trim_done = 1;
   memcpy(out_buf, in_buf, len);
 
   /*********************
@@ -8126,9 +8139,9 @@ u8 has_new_packet(){
 
 	/*now c_new == c_cur_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
 
-	if((random()%proceed_mod>proceed_bar[Qid_cur-1]) && Qid_cur<c_max){ //yurocTODO: add rand stuff, give a ratio as global,
+	if(UR(proceed_mod)>proceed_bar[Qid_cur-1] && Qid_cur<c_max){ //yurocTODO: add rand stuff, give a ratio as global,
 		show_stats();
-		return 1;
+		return 2;
 	}
     show_stats();
     return 0;
