@@ -23,6 +23,7 @@ commute: when c changes in TP, TP will increment the value of fixed fuzzing step
 Hands on:
 
 *) the logic of testing openssl.c is wrong.
+*) when regress, short read from the orig packet of p1, in splicing. maybe there are variables we didnt back up when proceed? check queued_paths and current entry, and queue_cur. 
 
 
 
