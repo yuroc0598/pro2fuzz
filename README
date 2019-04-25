@@ -24,7 +24,9 @@ Hands on:
 
 *) the logic of testing openssl.c is wrong.
 *) when regress, short read from the orig packet of p1, in splicing. maybe there are variables we didnt back up when proceed? check queued_paths and current entry, and queue_cur. 
-
+*) because we jump out of fuzzing Q1 to proceed to Q2 in the middle of fuzz_one, something may happen to the queue_cur->len, maybe force it to be the lenght of actual len when proceed: 
+*) why did orig packet size increase after proceed_fuzzing: proceed_fuzz, somehow copied orig p2 to orig p1:
+	- point: after proceed_fuzzing, in perform dry run, in calibrate_case, run_target, write(), the file descriptor of fsrv_ctl_fd is not right
 
 
 
