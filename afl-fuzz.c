@@ -344,7 +344,7 @@ const u8 c_max = 4;
 static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur;
 static u8* Qid_str_cur;
-const u8 Q_max_cycle=4;
+const u8 Q_max_cycle=2;
 u8 proceed_times,
    regress_times;
 
