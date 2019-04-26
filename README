@@ -28,7 +28,11 @@ Hands on:
 *) why did orig packet size increase after proceed_fuzzing: proceed_fuzz, somehow copied orig p2 to orig p1:
 	- point: after proceed_fuzzing, in perform dry run, in calibrate_case, run_target, write(), the file descriptor of fsrv_ctl_fd is not right
 
+*) when proceed fuzzing, in switch_to_Q, it will call setup_dirs_fds, and it will alloc some fds, some are duplicated: /dev/null, /dev/urandom, add condition in setup_dirs_fds, only create them if the Qid_cur == 1,
 
+*) still bug in short read for now, in common_fuzz_stuff, make the return value to 3 if queued_paths is larger than 10, force regression, and remove ret_val for skipped_fuzz, use ret_common_fuzz directly
+
+*) what to do with the queue_cur when regress, queue_cur has been fuzzed partially, not finishing the whole fuzz_one yet. maybe in has_new_packet, add condition: if the queue_cur->invoke_new_packet is true, then it has already been proceeded.
 
 Done:
 

@@ -324,8 +324,17 @@ enum {
   /* 05 */ FAULT_NOBITS
 };
 
+enum{
+	/*00*/ NO_NEW_PACKET,
+	/*01*/ REAL_NEW_PACKET,
+	/*02*/ FAKE_NEW_PACKET
+}; // return values of has_new_packet
 
-
+enum{
+	/*00*/ NORMAL,
+	/*01*/ EXIT_PROCEED,
+	/*02*/ EXIT_REGRESS
+}; // return value of common_fuzz_stuff
 
 /* --------------------------------start globals for pro2fuzz:--------------------------------------------*/
 
@@ -341,10 +350,11 @@ u8  c_new = 1;
 const u8 c_min = 1;
 const u8 c_max = 4;
 
-static u8  ret_common_fuzz=0;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
+static u8  ret_common_fuzz=NORMAL;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur;
 static u8* Qid_str_cur;
 const u8 Q_max_cycle=1;
+const u8 Q_max_paths=10;
 u8 proceed_times,
    regress_times;
 
@@ -355,7 +365,7 @@ double avg_exec_multiQ,
 const u8 proceed_mod = 80;
 u8 proceed_bar[4] = {60,50,30,80};
 u32 num_paths[4]={0,0,0,0};
-
+u8 disable_show = 0;
 
 struct Q
 {
@@ -3960,6 +3970,7 @@ static void check_term_size(void);
 
 static void show_stats(void) {
 
+if(!disable_show){
   static u64 last_stats_ms, last_plot_ms, last_ms, last_execs;
   static double avg_exec;
   double t_byte_ratio, stab_ratio;
@@ -4439,7 +4450,7 @@ static void show_stats(void) {
   /* Hallelujah! */
 
   fflush(0);
-
+}
 }
 
 
@@ -4713,21 +4724,6 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
   fault = run_target(argv, exec_tmout);
 
 
-  /*yuroc: if new packets are seen, then return 2, then in fuzz_one, goto abandon_entry, check if it is 2, if 2, then proceed_fuzzing*/
-  u8 hnp = has_new_packet();
-  if(hnp > 0){
-    /*maybe do something else for stats
-    */
-	if(hnp == 1) queue_cur->invoke_new_packet = 1;
-    ret_common_fuzz = 2;
-    queued_discovered += save_if_interesting(argv, out_buf, len, fault);
-
-    if (!(stage_cur % stats_update_freq) || stage_cur + 1 == stage_max)
-      show_stats();
-
-    return 2;
-  }
-
 
   if (stop_soon) {
       ret_common_fuzz = 1;  
@@ -4754,6 +4750,27 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
      ret_common_fuzz = 1;  
      return 1;
 
+  }
+  /*yuroc: if new packets are seen, then return 2, then in fuzz_one, goto abandon_entry, check if it is 2, if 2, then proceed_fuzzing*/
+  u8 hnp = has_new_packet();
+  if(hnp){
+    /*maybe do something else for stats
+    */
+	if(hnp == REAL_NEW_PACKET) queue_cur->invoke_new_packet = 1;
+    queued_discovered += save_if_interesting(argv, out_buf, len, fault);
+
+    if (!(stage_cur % stats_update_freq) || stage_cur + 1 == stage_max)
+      show_stats();
+
+    ret_common_fuzz = EXIT_PROCEED;
+    return EXIT_PROCEED;
+  }
+
+/*yurocRemove*/
+
+  if(queued_paths>Q_max_paths){
+  	ret_common_fuzz = EXIT_REGRESS;
+	return EXIT_REGRESS;
   }
 
 
@@ -6746,11 +6763,6 @@ retry_splicing:
 //  /*end yurocRemove*/
 abandon_entry:
 
-  if(ret_common_fuzz==2){
-      /*new packets are seen*/
-            ret_val = 2;
-	}
-  
        splicing_with = -1;
     
       /* Update pending_not_fuzzed count if we made it through the calibration
@@ -7331,12 +7343,13 @@ EXP_ST void setup_dirs_fds(void) {
 
   /* Generally useful file descriptors. */
 
-  dev_null_fd = open("/dev/null", O_RDWR);
-  if (dev_null_fd < 0) PFATAL("Unable to open /dev/null");
-
-  dev_urandom_fd = open("/dev/urandom", O_RDONLY);
-  if (dev_urandom_fd < 0) PFATAL("Unable to open /dev/urandom");
-
+  if(Qid_cur == 1){ //yurocAdd
+	  dev_null_fd = open("/dev/null", O_RDWR);
+	  if (dev_null_fd < 0) PFATAL("Unable to open /dev/null");
+	
+	  dev_urandom_fd = open("/dev/urandom", O_RDONLY);
+	  if (dev_urandom_fd < 0) PFATAL("Unable to open /dev/urandom");
+  }
   /* Gnuplot output file. */
 
   tmp = alloc_printf("%s/plot_data", out_dir);
@@ -8124,25 +8137,25 @@ u8 has_new_packet(){
 // a simple checking
     if(c_new<c_min || c_new>c_max) PFATAL("current count of packets is out of range!\n");
 
-	if(c_new < c_cur_max) return 0;
+	if(c_new < c_cur_max) return NO_NEW_PACKET;
 
 // if we are in calibration or trim stage, then do not consider new packets
 	if(strcmp(stage_name,"calibration")==0 || strcmp(stage_name,"trim")==0 || strcmp(stage_name,"init")==0 || c_cur_max==1){
 		if(c_new>c_cur_max) c_cur_max = c_new;
-		return 0;
+		return NO_NEW_PACKET;
 	}
 
     if(c_new > c_cur_max){
         c_cur_max = c_new;
         show_stats();
-        return 1;
+        return REAL_NEW_PACKET;
     }
 
 	/*now c_new == c_cur_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
 
 	if(UR(proceed_mod)>proceed_bar[Qid_cur-1] && Qid_cur<c_max){ //yurocTODO: add rand stuff, give a ratio as global,
 		show_stats();
-		return 2;
+		return FAKE_NEW_PACKET;
 	}
     show_stats();
     return 0;
@@ -8528,11 +8541,8 @@ int main(int argc, char** argv) {
       queue_cycle++;
 
 	  if(queue_cycle>Q_max_cycle && Qid_cur>1){
-
 		regress_fuzzing();
 		continue;
-        //PFATAL("now regress fuzz, Qid is %x",Qid_cur);
-
       }
 		
       current_entry     = 0;
@@ -8570,15 +8580,16 @@ int main(int argc, char** argv) {
 
     skipped_fuzz = fuzz_one(use_argv);
         
-    if(skipped_fuzz==2){
+    if(ret_common_fuzz ==EXIT_PROCEED && Qid_cur<c_max){
          proceed_fuzzing();
-		//yurocMaybe: delete this and just make new Q favored = 1, if so, still need to update top_rated
   		 perform_dry_run(use_argv);
 		 continue;
-         //PFATAL("now proceed fuzz, Qid is %x",Qid_cur);
     }
-    
    
+	if(ret_common_fuzz ==EXIT_REGRESS && Qid_cur>c_min){
+		regress_fuzzing();
+		continue;
+	}
 
     if (!stop_soon && sync_id && !skipped_fuzz) {
       
