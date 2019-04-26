@@ -353,8 +353,6 @@ const u8 c_max = 4;
 static u8  ret_common_fuzz=NORMAL;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur;
 static u8* Qid_str_cur;
-const u8 Q_max_cycle=1;
-const u8 Q_max_paths=10;
 u8 proceed_times,
    regress_times;
 
@@ -362,10 +360,8 @@ double avg_exec_multiQ,
 	   t_byte_ratio_multiQ,
 	   stab_ratio_multiQ;
 
-const u8 proceed_mod = 80;
 u8 proceed_bar[4] = {60,50,30,80};
 u32 num_paths[4]={0,0,0,0};
-u8 disable_show = 0;
 
 struct Q
 {
@@ -2466,6 +2462,8 @@ static u8 run_target(char** argv, u32 timeout) {
 
     }
 
+	  if(Qid_cur==2) PFATAL("stop here for debug");//yurocRemove
+
     if ((res = read(fsrv_st_fd, &child_pid, 4)) != 4) {
 
       if (stop_soon) return 0;
@@ -3970,7 +3968,7 @@ static void check_term_size(void);
 
 static void show_stats(void) {
 
-if(!disable_show){
+if(!DISABLE_SHOW){
   static u64 last_stats_ms, last_plot_ms, last_ms, last_execs;
   static double avg_exec;
   double t_byte_ratio, stab_ratio;
@@ -4451,6 +4449,10 @@ if(!disable_show){
 
   fflush(0);
 }
+
+else{
+	printf("cur step: %u, totoal proceed: %d, total regress:%d, queued:%d\n",Qid_cur,proceed_times,regress_times,queued_paths);
+}
 }
 
 
@@ -4768,7 +4770,7 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
 /*yurocRemove*/
 
-  if(queued_paths>Q_max_paths){
+  if(queued_paths>Q_MAX_PATHS){
   	ret_common_fuzz = EXIT_REGRESS;
 	return EXIT_REGRESS;
   }
@@ -8153,7 +8155,7 @@ u8 has_new_packet(){
 
 	/*now c_new == c_cur_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
 
-	if(UR(proceed_mod)>proceed_bar[Qid_cur-1] && Qid_cur<c_max){ //yurocTODO: add rand stuff, give a ratio as global,
+	if(UR(PROCEED_MOD)>proceed_bar[Qid_cur-1] && Qid_cur<c_max){ //yurocTODO: add rand stuff, give a ratio as global,
 		show_stats();
 		return FAKE_NEW_PACKET;
 	}
@@ -8540,7 +8542,7 @@ int main(int argc, char** argv) {
 
       queue_cycle++;
 
-	  if(queue_cycle>Q_max_cycle && Qid_cur>1){
+	  if(queue_cycle>Q_MAX_CYCLE && Qid_cur>1){
 		regress_fuzzing();
 		continue;
       }

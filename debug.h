@@ -245,7 +245,7 @@
 #define ck_read(fd, buf, len, fn) do { \
     u32 _len = (len); \
     s32 _res = read(fd, buf, _len); \
-    if (_res != _len) RPFATAL(_res, "Short read from %s", fn); \
+    if (_res != _len) RPFATAL(_res, "Short read from %s,claim:%d,actual:%d", fn,_len,_res); \
   } while (0)
 
 #endif /* ! _HAVE_DEBUG_H */

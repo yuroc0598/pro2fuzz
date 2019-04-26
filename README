@@ -32,7 +32,9 @@ Hands on:
 
 *) still bug in short read for now, in common_fuzz_stuff, make the return value to 3 if queued_paths is larger than 10, force regression, and remove ret_val for skipped_fuzz, use ret_common_fuzz directly
 
-*) what to do with the queue_cur when regress, queue_cur has been fuzzed partially, not finishing the whole fuzz_one yet. maybe in has_new_packet, add condition: if the queue_cur->invoke_new_packet is true, then it has already been proceeded.
+*) what to do with the queue_cur when regress, queue_cur has been fuzzed partially, not finishing the whole fuzz_one yet. maybe in has_new_packet, add condition: if the queue_cur->invoke_new_packet is true, then it has already been proceeded.: no need to worry because c_max has changed,
+
+*) use strace to debug the shortread problem, at the end , show broken pipe.
 
 Done:
 

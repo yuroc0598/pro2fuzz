@@ -21,13 +21,20 @@
 
 /* Version string: */
 
-#define VERSION             "2.52b"
+#define VERSION             "1.0b"
 
 /******************************************************
  *                                                    *
  *  Settings that may be of interest to power users:  *
  *                                                    *
  ******************************************************/
+
+/*yurocAdd*/
+
+#define PROCEED_MOD 80
+#define Q_MAX_CYCLE 1
+#define Q_MAX_PATHS 100
+#define DISABLE_SHOW 1
 
 /* Comment out to disable terminal colors (note that this makes afl-analyze
    a lot less nice): */
