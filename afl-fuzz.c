@@ -332,8 +332,9 @@ enum{
 
 enum{
 	/*00*/ NORMAL,
-	/*01*/ EXIT_PROCEED,
-	/*02*/ EXIT_REGRESS
+	/*01*/ EXIT_SKIP,
+	/*02*/ EXIT_PROCEED,
+	/*03*/ EXIT_REGRESS
 }; // return value of common_fuzz_stuff
 
 /* --------------------------------start globals for pro2fuzz:--------------------------------------------*/
@@ -351,7 +352,7 @@ const u8 c_min = 1;
 const u8 c_max = 4;
 
 static u8  ret_common_fuzz=NORMAL;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
-static u8  Qid_cur;
+static u8  Qid_cur=1;
 static u8* Qid_str_cur;
 u8 proceed_times,
    regress_times;
@@ -360,7 +361,7 @@ double avg_exec_multiQ,
 	   t_byte_ratio_multiQ,
 	   stab_ratio_multiQ;
 
-u8 proceed_bar[4] = {60,50,30,80};
+u8 proceed_bar[4] = {60,50,30,PROCEED_MOD};
 u32 num_paths[4]={0,0,0,0};
 
 struct Q
@@ -2462,7 +2463,6 @@ static u8 run_target(char** argv, u32 timeout) {
 
     }
 
-	  if(Qid_cur==2) PFATAL("stop here for debug");//yurocRemove
 
     if ((res = read(fsrv_st_fd, &child_pid, 4)) != 4) {
 
@@ -2472,6 +2472,7 @@ static u8 run_target(char** argv, u32 timeout) {
     }
 
     if (child_pid <= 0) FATAL("Fork server is misbehaving (OOM?)");
+
 
   }
 
@@ -2564,9 +2565,16 @@ static void write_to_testcase(void* mem, u32 len) {
 
   if (out_file) {
 
-    unlink(out_file); /* Ignore errors. */
+	  unlink(out_file);
+/*
+    if(!unlink(out_file)){
+
+	   	PFATAL("in write_to_testcase, unlink file failed and the error is %d, the error ENOENT is %d\n",errno,ENOENT); 
+	}
+*/
 
     fd = open(out_file, O_WRONLY | O_CREAT | O_EXCL, 0600);
+
 
     if (fd < 0) PFATAL("Unable to create '%s'", out_file);
 
@@ -2818,6 +2826,7 @@ static void perform_dry_run(char** argv) {
     close(fd);
 
     res = calibrate_case(argv, q, use_mem, 0, 1);
+
     ck_free(use_mem);
 
     if (stop_soon) return;
@@ -2997,11 +3006,14 @@ static void perform_dry_run(char** argv) {
 
 static void link_or_copy(u8* old_path, u8* new_path) {
 
-  s32 i = link(old_path, new_path);
-  s32 sfd, dfd;
+	/*yurocRemove*/
+ // s32 i = link(old_path, new_path);
+	/*yurocRemove*/
+  s32 sfd, dfd,i;
   u8* tmp;
 
-  if (!i) return;
+
+ // if (!i) return;
 
   sfd = open(old_path, O_RDONLY);
   if (sfd < 0) PFATAL("Unable to open '%s'", old_path);
@@ -4451,7 +4463,7 @@ if(!DISABLE_SHOW){
 }
 
 else{
-	printf("cur step: %u, totoal proceed: %d, total regress:%d, queued:%d\n",Qid_cur,proceed_times,regress_times,queued_paths);
+	printf("cur step: %u, totoal proceed: %d, total regress:%d, queued:%d, cycle:%llu\n",Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle);
 }
 }
 
@@ -4726,7 +4738,6 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
   fault = run_target(argv, exec_tmout);
 
 
-
   if (stop_soon) {
       ret_common_fuzz = 1;  
       return 1;
@@ -4755,7 +4766,7 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
   }
   /*yuroc: if new packets are seen, then return 2, then in fuzz_one, goto abandon_entry, check if it is 2, if 2, then proceed_fuzzing*/
   u8 hnp = has_new_packet();
-  if(hnp){
+  if(hnp && Qid_cur<c_max){
     /*maybe do something else for stats
     */
 	if(hnp == REAL_NEW_PACKET) queue_cur->invoke_new_packet = 1;
@@ -4770,7 +4781,7 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
 /*yurocRemove*/
 
-  if(queued_paths>Q_MAX_PATHS){
+  if(queued_paths>Q_MAX_PATHS && Qid_cur>c_min){
   	ret_common_fuzz = EXIT_REGRESS;
 	return EXIT_REGRESS;
   }
@@ -5121,7 +5132,10 @@ static u8 fuzz_one(char** argv) {
        cases. */
 
     if ((queue_cur->was_fuzzed || !queue_cur->favored) &&
-        UR(100) < SKIP_TO_NEW_PROB) return 1;
+        UR(100) < SKIP_TO_NEW_PROB) {
+		ret_common_fuzz = NORMAL;	
+		return 1;
+	}
 
   } else if (!dumb_mode && !queue_cur->favored && queued_paths > 10) {
 
@@ -5131,11 +5145,18 @@ static u8 fuzz_one(char** argv) {
 
     if (queue_cycle > 1 && !queue_cur->was_fuzzed) {
 
-      if (UR(100) < SKIP_NFAV_NEW_PROB) return 1;
+      if (UR(100) < SKIP_NFAV_NEW_PROB) 
+	  {
+		  ret_common_fuzz = NORMAL;
+		  return 1;
+	  }
 
     } else {
 
-      if (UR(100) < SKIP_NFAV_OLD_PROB) return 1;
+      if (UR(100) < SKIP_NFAV_OLD_PROB){
+		  ret_common_fuzz = NORMAL;
+		  return 1;
+	  }
 
     }
 
@@ -6756,13 +6777,6 @@ retry_splicing:
 #endif /* !IGNORE_FINDS */
 
   ret_val = 0;
-//  /*yurocRemove: for debugging, force regression*/
-//  if(Qid_cur>1){
-//  	queue_cycle = 20;
-//	queue_cur->next = NULL;
-//	return 1;
-//  }
-//  /*end yurocRemove*/
 abandon_entry:
 
        splicing_with = -1;
@@ -7884,7 +7898,7 @@ void close_fds(){
 	int status = flock(out_dir_fd,LOCK_UN | LOCK_NB);
 	if(status) PFATAL("In close_fds, releasing lock %s failed",out_dir);
 	close(out_dir_fd);
-	fclose(plot_file);
+    close(fileno(plot_file));
 }
 
 void reassign_fds(){
@@ -8016,7 +8030,7 @@ void store_Q() {
 	curQ->Q_prev100 = q_prev100;
     copy_top_rated(top_rated,curQ->Q_top_rated);
 	show_stats();
-    write_stats_file(t_byte_ratio_multiQ, stab_ratio_multiQ, avg_exec_multiQ); //yurocAdd
+   // write_stats_file(t_byte_ratio_multiQ, stab_ratio_multiQ, avg_exec_multiQ); //yurocAdd
 
 }
 
@@ -8059,12 +8073,9 @@ void init_Q(){
     if(Qid_cur!=1) PFATAL("Qid_cur is not 1 when init Q, something is wrong\n");
 
     multiQ[0]=constructQ();
-    //switch_to_Q(0,1);
     Qid_str_cur = alloc_printf("p%x",Qid_cur);
     in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
     out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
-	setup_dirs_fds();
-
 
 }
 
@@ -8088,7 +8099,6 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
     /*scan the src_path first to see if it exist*/
     if (access(fn,F_OK)!=0) PFATAL("The packet with Qid %x does not exist in %s\n", Qid_cur, fn);
     struct stat st;
-    u8* dfn = alloc_printf("%s/.state/deterministic_done/packet", in_dir);
 
     if (lstat(fn, &st) || access(fn, R_OK))
       PFATAL("Unable to access '%s'", fn);
@@ -8098,21 +8108,20 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
       FATAL("Test case '%s' is too big (%s, limit is %s)", fn,
             DMS(st.st_size), DMS(MAX_FILE));
 
-    /* Check for metadata that indicates that deterministic fuzzing
-       is complete for this entry. We don't want to repeat deterministic
-       fuzzing when resuming aborted scans, because it would be pointless
-       and probably very time-consuming. */
-    u8 passed_det = 0;
 
-    if (!access(dfn, F_OK)) passed_det = 1;
-    ck_free(dfn);
-
-    add_to_queue(fn, st.st_size, passed_det);
+    add_to_queue(fn, st.st_size, 0);
     last_path_time = 0;
     queued_at_start = 1;
     queued_paths = 1;
-    pivot_inputs();// after this, fn points to another mem, to the file in out_dir/queue, and the previous one has been ck_freed
+
+	/*no need to call pivot_inputs, just one case, write manually*/
+
+	u8* nfn = alloc_printf("%s/queue/id:%06u,orig:packet",out_dir,0);
+	link_or_copy(queue->fname,nfn);
+    ck_free(queue->fname);
+    queue->fname = nfn;
     show_stats();
+
 }
 
 
@@ -8139,7 +8148,7 @@ u8 has_new_packet(){
 // a simple checking
     if(c_new<c_min || c_new>c_max) PFATAL("current count of packets is out of range!\n");
 
-	if(c_new < c_cur_max) return NO_NEW_PACKET;
+	if(c_new < c_cur_max || Qid_cur==c_max) return NO_NEW_PACKET;
 
 // if we are in calibration or trim stage, then do not consider new packets
 	if(strcmp(stage_name,"calibration")==0 || strcmp(stage_name,"trim")==0 || strcmp(stage_name,"init")==0 || c_cur_max==1){
@@ -8430,7 +8439,7 @@ int main(int argc, char** argv) {
     }
   //yuroc
 
-  init_Q();
+  init_Q(); //yurocAdd
   if (optind == argc || !in_dir || !out_dir) usage(argv[0]);
 
   setup_signal_handlers();
@@ -8487,6 +8496,7 @@ int main(int argc, char** argv) {
   setup_post();
   setup_shm();
   init_count_class16();
+  setup_dirs_fds();
 
   if (!timeout_given) find_timeout();
   detect_file_args(argv + optind + 1);
@@ -8542,7 +8552,7 @@ int main(int argc, char** argv) {
 
       queue_cycle++;
 
-	  if(queue_cycle>Q_MAX_CYCLE && Qid_cur>1){
+	  if(queue_cycle>Q_MAX_CYCLE && Qid_cur>c_min){
 		regress_fuzzing();
 		continue;
       }
@@ -8581,6 +8591,17 @@ int main(int argc, char** argv) {
     }
 
     skipped_fuzz = fuzz_one(use_argv);
+    if (!stop_soon && sync_id && !skipped_fuzz) {
+      
+      if (!(sync_interval_cnt++ % SYNC_INTERVAL))
+        sync_fuzzers(use_argv);
+
+    }
+
+    if (!stop_soon && exit_1) stop_soon = 2;
+
+    if (stop_soon) break;
+
         
     if(ret_common_fuzz ==EXIT_PROCEED && Qid_cur<c_max){
          proceed_fuzzing();
@@ -8593,16 +8614,6 @@ int main(int argc, char** argv) {
 		continue;
 	}
 
-    if (!stop_soon && sync_id && !skipped_fuzz) {
-      
-      if (!(sync_interval_cnt++ % SYNC_INTERVAL))
-        sync_fuzzers(use_argv);
-
-    }
-
-    if (!stop_soon && exit_1) stop_soon = 2;
-
-    if (stop_soon) break;
 
     queue_cur = queue_cur->next; 
     current_entry++;

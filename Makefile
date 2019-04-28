@@ -27,8 +27,8 @@ MISC_PATH   = $(PREFIX)/share/afl
 PROGS       = afl-gcc afl-fuzz afl-showmap afl-tmin afl-gotcpu afl-analyze
 SH_PROGS    = afl-plot afl-cmin afl-whatsup
 
-# disable opti for now , change O3 to O0
-CFLAGS     ?= -O0 -funroll-loops
+# disable opti for now , change O3 to O0: yurocAdd
+CFLAGS     ?= -O3 -funroll-loops
 CFLAGS     += -Wall -D_FORTIFY_SOURCE=2 -g -Wno-pointer-sign \
 	      -DAFL_PATH=\"$(HELPER_PATH)\" -DDOC_PATH=\"$(DOC_PATH)\" \
 	      -DBIN_PATH=\"$(BIN_PATH)\"

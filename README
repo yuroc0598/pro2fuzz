@@ -22,20 +22,6 @@ commute: when c changes in TP, TP will increment the value of fixed fuzzing step
 
 Hands on:
 
-*) the logic of testing openssl.c is wrong.
-*) when regress, short read from the orig packet of p1, in splicing. maybe there are variables we didnt back up when proceed? check queued_paths and current entry, and queue_cur. 
-*) because we jump out of fuzzing Q1 to proceed to Q2 in the middle of fuzz_one, something may happen to the queue_cur->len, maybe force it to be the lenght of actual len when proceed: 
-*) why did orig packet size increase after proceed_fuzzing: proceed_fuzz, somehow copied orig p2 to orig p1:
-	- point: after proceed_fuzzing, in perform dry run, in calibrate_case, run_target, write(), the file descriptor of fsrv_ctl_fd is not right
-
-*) when proceed fuzzing, in switch_to_Q, it will call setup_dirs_fds, and it will alloc some fds, some are duplicated: /dev/null, /dev/urandom, add condition in setup_dirs_fds, only create them if the Qid_cur == 1,
-
-*) still bug in short read for now, in common_fuzz_stuff, make the return value to 3 if queued_paths is larger than 10, force regression, and remove ret_val for skipped_fuzz, use ret_common_fuzz directly
-
-*) what to do with the queue_cur when regress, queue_cur has been fuzzed partially, not finishing the whole fuzz_one yet. maybe in has_new_packet, add condition: if the queue_cur->invoke_new_packet is true, then it has already been proceeded.: no need to worry because c_max has changed,
-
-*) use strace to debug the shortread problem, at the end , show broken pipe.
-
 Done:
 
 
@@ -117,8 +103,31 @@ Done:
 
 ISSUE:
 
-1) The real question is, what should be the initial value of c_cur, if 0, apparently no, if has_new_packet() in calibrate, then c_cur is already 4, hard to proceed.
 
+>>>>>>>>>>>>>>>>>>>> short read >>>>>>>>>>>>>>>>>>>>>>>>>>>>
+*) the logic of testing openssl.c is wrong.
+*) when regress, short read from the orig packet of p1, in splicing. maybe there are variables we didnt back up when proceed? check queued_paths and current entry, and queue_cur. 
+*) because we jump out of fuzzing Q1 to proceed to Q2 in the middle of fuzz_one, something may happen to the queue_cur->len, maybe force it to be the lenght of actual len when proceed: 
+*) why did orig packet size increase after proceed_fuzzing: proceed_fuzz, somehow copied orig p2 to orig p1:
+	- point: after proceed_fuzzing, in perform dry run, in calibrate_case, run_target, write(), the file descriptor of fsrv_ctl_fd is not right
+
+*) when proceed fuzzing, in switch_to_Q, it will call setup_dirs_fds, and it will alloc some fds, some are duplicated: /dev/null, /dev/urandom, add condition in setup_dirs_fds, only create them if the Qid_cur == 1,
+
+*) still bug in short read for now, in common_fuzz_stuff, make the return value to 3 if queued_paths is larger than 10, force regression, and remove ret_val for skipped_fuzz, use ret_common_fuzz directly
+
+*) what to do with the queue_cur when regress, queue_cur has been fuzzed partially, not finishing the whole fuzz_one yet. maybe in has_new_packet, add condition: if the queue_cur->invoke_new_packet is true, then it has already been proceeded.: no need to worry because c_max has changed,
+
+*) use strace to debug the shortread problem, at the end , show broken pipe.
+
+*) after proceed fuzzing, when perform dry run, the q2 orig is opened, however, when open q2 orig, the fd is 8, 8 should be always point to "input".
+
+*) something happened in calibrate_case before calling run_target; something happend in write_to_testcase
+
+*) even before proceed_fuzzing, write_to_testcase is wrong, it should not touch the file in p1/queue/orig.
+
+*) solved: afl will link out/orig to in/p1, and openssl will write to p1 per execution, so p1 will change. change link_or_copy, to make it copy instead of link.
+
+<<<<<<<<<<<<<<<<<<<<<<<short red<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 
 

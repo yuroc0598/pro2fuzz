@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 	u8 c, step;
 	unsigned char buf[4096];
 	const char ifi[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/input";
-
+	char* res_shm= NULL;
 	FILE *f;
 	SSL_CTX *sctx, *cctx;
 	SSL *server, *client;
@@ -61,10 +61,19 @@ int main(int argc, char **argv)
 
 	step = 1; 
 #ifdef __AFL_HAVE_MANUAL_CONTROL
-		int shmid = atoi(getenv("__AFL_SHM_ID"));
+		res_shm = getenv("__AFL_SHM_ID");
+		if(!res_shm){
+			printf("SHM get failed!\n");
+			return -3;
+		}
+	    FILE* fasd = fopen("/home/yuroc/tmp/fuzz/shmget","wb");
+    	fwrite("asd",1,4,fasd);
+		fclose(fasd);
+
+		int shmid = atoi(res_shm);
 		u8* shmptr = shmat(shmid,NULL,0);
     	step = shmptr[MAP_SIZE];
-   #endif
+#endif
 
 	SSL_library_init();
 	SSL_load_error_strings();
@@ -133,7 +142,10 @@ int main(int argc, char **argv)
 	    	fclose(f);
 			write_packet(c,buf,r);
 		} 
-        else r = read_packet(c,buf);
+        else {
+			r = read_packet(c,buf);
+		
+		}
         
         BIO_write(sinbio, buf, r);
 
@@ -166,7 +178,9 @@ int main(int argc, char **argv)
 			r = fread(buf, 1, 4096, f);
 			fclose(f);
 			write_packet(c,buf,r);
-		} else r = read_packet(c,buf);
+		} else{
+			 r = read_packet(c,buf);
+		}
 
         BIO_write(cinbio, buf, r);
 
@@ -179,9 +193,10 @@ int main(int argc, char **argv)
 		  || !SSL_is_init_finished(client)) && c < 10);
     
 #ifdef __AFL_HAVE_MANUAL_CONTROL
-	printf("handshake finished, done or fail, the value of c is %d\n",c);
+	if(res_shm){
 	shmptr[MAP_SIZE] = c;
 	shmdt(shmptr);
+	}
 #endif
 	return 0;
 }
