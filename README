@@ -1,8 +1,9 @@
-Progressive Fuzzing:
+Protocol Progressive Fuzzing:
 
-
+----------------------------------------------------------------------------------------------------------------------------------
 Overview:
 
+----------------------------------------------------------------------------------------------------------------------------------
 1) share progress with fuzzer using shared mem, trace_bits:
 
 init : when shm is created, add one more byte at the end, init it to 0, this is for the "c" value in testing program. (how does TP load and write to this shm? currently TP load by default, so don't load it again.)
@@ -22,8 +23,17 @@ commute: when c changes in TP, TP will increment the value of fixed fuzzing step
 
 Hands on:
 
+----------------------------------------------------------------------------------------------------------------------------------
+
+*) we can modidy the LLVM pass, to enable multiple fork. In the pass code, setup the shm first, then read the step value from shm. Everytime the Openssl TP encounters the "__AFL_INIT", it will call forkserver logic. By default, the fs will be initialized when step==1 and init_done is set to 1, fs logic will never be called again. Now, add a condition to enable multi forks. Add a global value to count the times "__AFL_INIT" has occured (init_count), then the condition should be shm[MAP_SIZE] == init_count+1. In this case, at first when fuzzing p1, the fs is up and child is forked. And now fs is in the infinite while loop waiting for another signal, when it comes and shm[MAP_SIZE]==2, it will fork, and encounter the second "__AFL_INIT" in the openssl TP source code, which calls to init fs again, this time, step is 2, and the fs will fork again, setup fds, (parent should close fds). When regressing, the fs will find that init_count > step, so it needs to kill itself and close the fds and send signal to parent (which is the fs forking p1).
+
+
+
+
+
 Done:
 
+----------------------------------------------------------------------------------------------------------------------------------
 
 *) maybe update the bitmap priority policy, the packet that generate larger c value get more air time. check where is update_bitmap_score used: I add save_if_interesting into the new packet branch in common_fuzz_stuff, so that when new packets come, it won't directly jump to main loop to proceed, but will save the current testcase if favored. maybe add more weight on the perf score it has? something like invoke_new_packet(). I add the member invoke_new_packet to each queue entry, then update the value in has_new_packet, then cal the perf score in calculate score, make them the max value of havoc time.
 
@@ -103,6 +113,7 @@ Done:
 
 ISSUE:
 
+----------------------------------------------------------------------------------------------------------------------------------
 
 >>>>>>>>>>>>>>>>>>>> short read >>>>>>>>>>>>>>>>>>>>>>>>>>>>
 *) the logic of testing openssl.c is wrong.

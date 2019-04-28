@@ -33,7 +33,7 @@
 
 #define PROCEED_MOD 80
 #define Q_MAX_CYCLE 1
-#define Q_MAX_PATHS 10
+#define Q_MAX_PATHS 100
 #define DISABLE_SHOW 0
 
 /* Comment out to disable terminal colors (note that this makes afl-analyze

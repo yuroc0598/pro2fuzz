@@ -66,10 +66,6 @@ int main(int argc, char **argv)
 			printf("SHM get failed!\n");
 			return -3;
 		}
-	    FILE* fasd = fopen("/home/yuroc/tmp/fuzz/shmget","wb");
-    	fwrite("asd",1,4,fasd);
-		fclose(fasd);
-
 		int shmid = atoi(res_shm);
 		u8* shmptr = shmat(shmid,NULL,0);
     	step = shmptr[MAP_SIZE];
@@ -137,10 +133,14 @@ int main(int argc, char **argv)
 #ifdef __AFL_HAVE_MANUAL_CONTROL
 			__AFL_INIT();
 #endif
+    		step = shmptr[MAP_SIZE];
+			if(c==step){
 		    f = fopen(ifi, "rb");
     		r = fread(buf, 1, 4096, f);
 	    	fclose(f);
 			write_packet(c,buf,r);
+			}
+			else r = read_packet(c,buf);
 		} 
         else {
 			r = read_packet(c,buf);
@@ -171,9 +171,10 @@ int main(int argc, char **argv)
         
 		if (c == step) {
         printf("we found step at server\n");
-#ifdef __AFL_HAVE_MANUAL_CONTROL
-			__AFL_INIT();
-#endif
+//#ifdef __AFL_HAVE_MANUAL_CONTROL
+//			__AFL_INIT();
+//#endif
+
 			f = fopen(ifi, "rb");
 			r = fread(buf, 1, 4096, f);
 			fclose(f);

@@ -7968,24 +7968,23 @@ void switch_to_Q(u8 old,u8 new){ // when this is called, Qid_cur is already new
 	q_prev100 = curQ->Q_prev100;
 	copy_top_rated(curQ->Q_top_rated,top_rated);
 	// change dirs
-	/*
     ck_free(Qid_str_cur);
     ck_free(in_dir);
     ck_free(out_dir);
     Qid_str_cur = alloc_printf("p%x",new);
     in_dir = alloc_printf("%s/%s",in_dir_raw,Qid_str_cur);
     out_dir = alloc_printf("%s/%s",out_dir_raw,Qid_str_cur);
-	*/
 
 	if(new>old){
+		/*ugly hardcoded*/
+		/*
 		Qid_str_cur[1]++;
 		in_dir[68]++;
 		out_dir[69]++;
-		//in_place_resume = 0;
-		//resuming_fuzz = 0;
+		*/
 		setup_dirs_fds();
-
 	}
+/*
 	else{
 		Qid_str_cur[1]--;
 		in_dir[68]--;
@@ -7993,7 +7992,7 @@ void switch_to_Q(u8 old,u8 new){ // when this is called, Qid_cur is already new
 		//in_place_resume = 1;
 		//resuming_fuzz = 1;
 	}
-
+*/
 }
 
 
@@ -8113,7 +8112,7 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
     last_path_time = 0;
     queued_at_start = 1;
     queued_paths = 1;
-
+	queue->favored =1;
 	/*no need to call pivot_inputs, just one case, write manually*/
 
 	u8* nfn = alloc_printf("%s/queue/id:%06u,orig:packet",out_dir,0);
