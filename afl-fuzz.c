@@ -1432,8 +1432,8 @@ EXP_ST void setup_shm(void) {
 
   memset(virgin_tmout, 255, MAP_SIZE);
   memset(virgin_crash, 255, MAP_SIZE);
-  //yuroc: add 1 to shm
-  shm_id = shmget(IPC_PRIVATE, MAP_SIZE+1, IPC_CREAT | IPC_EXCL | 0600);
+  //yuroc: add 2 to shm
+  shm_id = shmget(IPC_PRIVATE, MAP_SIZE+2, IPC_CREAT | IPC_EXCL | 0600);
 
   if (shm_id < 0) PFATAL("shmget() failed");
 
@@ -1452,7 +1452,7 @@ EXP_ST void setup_shm(void) {
 
   trace_bits = shmat(shm_id, NULL, 0);
   //yuroc: init step
-  trace_bits[MAP_SIZE] = 1; // since this is only called once, we'll start from fuzzing the first packet
+  //trace_bits[MAP_SIZE] = 1; // since this is only called once, we'll start from fuzzing the first packet
   
   if (!trace_bits) PFATAL("shmat() failed");
 
@@ -2456,10 +2456,18 @@ static u8 run_target(char** argv, u32 timeout) {
     /* In non-dumb mode, we have the fork server up and running, so simply
        tell it to have at it, and then read back PID. */
 
+	if(Qid_cur<1) PFATAL("why Qid is 0, should never happen\n");
+    if ((res = write(fsrv_ctl_fd, &Qid_cur, 1)) != 1) {
+
+      if (stop_soon) return 0;
+      RPFATAL(res, "Unable to write Qid to fork server (OOM?)");
+
+    }
+
     if ((res = write(fsrv_ctl_fd, &prev_timed_out, 4)) != 4) {
 
       if (stop_soon) return 0;
-      RPFATAL(res, "Unable to request new process from fork server (OOM?)");
+      RPFATAL(res, "Write to pipe failed, unable to request new process from fork server (OOM?)");
 
     }
 
@@ -2467,7 +2475,7 @@ static u8 run_target(char** argv, u32 timeout) {
     if ((res = read(fsrv_st_fd, &child_pid, 4)) != 4) {
 
       if (stop_soon) return 0;
-      RPFATAL(res, "Unable to request new process from fork server (OOM?)");
+      RPFATAL(res, "Read from pipe failed, unable to request new process from fork server (OOM?)");
 
     }
 
@@ -8142,7 +8150,7 @@ void regress_fuzzing(){
 u8 has_new_packet(){
 
 // get c:
-    c_new = trace_bits[MAP_SIZE];
+    c_new = trace_bits[MAP_SIZE+1];
 
 // a simple checking
     if(c_new<c_min || c_new>c_max) PFATAL("current count of packets is out of range!\n");
@@ -8173,7 +8181,7 @@ u8 has_new_packet(){
 
 /*set the value of step, so that TP can read it and change fuzzing target*/
 void set_step(){
-	trace_bits[MAP_SIZE] = Qid_cur;
+	//trace_bits[MAP_SIZE] = Qid_cur;
 }
 
 /*the following functions are for debug*/

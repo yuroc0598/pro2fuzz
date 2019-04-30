@@ -33,7 +33,7 @@
 #include <sys/shm.h>
 #include <sys/wait.h>
 #include <sys/types.h>
-
+#include <fcntl.h>
 /* This is a somewhat ugly hack for the experimental 'trace-pc-guard' mode.
    Basically, we need to make sure that the forkserver is initialized after
    the LLVM-generated runtime initialization pass, not before. */
@@ -51,10 +51,11 @@
 
 u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
-
 __thread u32 __afl_prev_loc;
-
-
+u8 init_count=0;
+u8 step = 0;
+u8 fs_init = 0;
+u8 wait_for_regress = 0;
 /* Running in persistent mode? */
 
 static u8 is_persistent;
@@ -97,77 +98,77 @@ static void __afl_start_forkserver(void) {
   static u8 tmp[4];
   s32 child_pid;
 
-  u8  child_stopped = 0;
+  int tmpfd = open("/dev/null",0);
 
   /* Phone home and tell the parent that we're OK. If parent isn't there,
      assume we're not running in forkserver mode and just execute program. */
 
-  if (write(FORKSRV_FD + 1, tmp, 4) != 4) return;
+  if(init_count == 1){
+	  if (write(FORKSRV_FD + 1, tmp, 4) != 4) return;
+  }
+
+  u8 looped = 0;
 
   while (1) {
 
     u32 was_killed;
     int status;
+	// when fs2 is forked and entered here, step is already read by fs1. error. what we need is to avoid the read in the first while loop
 
-    /* Wait for parent by reading from the pipe. Abort if read fails. */
+	/* condition for read this shit:
+	 
+	 1) fs1 first time entered, e.g., fs_init == 0
+	 2) proceed: from second time loop, proceed will can this whole function, e.g., looped = 1
+	 3) regress: from second time loop, regress will just ask parent to restart from the loop.
+	 
+	 
+	 */
+	if ((looped || !fs_init) && !wait_for_regress){
+		if (read(FORKSRV_FD, &step,1)!=1) _exit(1); 
+		__afl_area_ptr[MAP_SIZE] = step;
+		fs_init = 1;
+	}
 
-    if (read(FORKSRV_FD, &was_killed, 4) != 4) _exit(1);
+	looped = 1;
+	if (init_count == step){ // when regress, step is still 2
 
-    /* If we stopped the child in persistent mode, but there was a race
-       condition and afl-fuzz already issued SIGKILL, write off the old
-       process. */
+		wait_for_regress = 0;
+	    if (read(FORKSRV_FD, &was_killed, 4) != 4) _exit(1);
+	    child_pid = fork();
+	    if (child_pid < 0) _exit(1);
+	    if (!child_pid) {return;}
 
-    if (child_stopped && was_killed) {
-      child_stopped = 0;
-      if (waitpid(child_pid, &status, 0) < 0) _exit(1);
-    }
+	    if (write(FORKSRV_FD + 1, &child_pid, 4) != 4) _exit(1);
+	    if (waitpid(child_pid, &status, 0) < 0)  _exit(1);
+	   	if (write(FORKSRV_FD + 1, &status, 4) != 4) _exit(1);
+		
+	}
+	else if(init_count < step){ // need to proceed, let kid read from pipe
+		// the default fs will read from pipe then execute, which means it will be blocked at read, simply remove the read may cause trouble. but waitpid is blocking, so maybe it's fine.
+		
+		child_pid = fork();
+	    if (child_pid < 0) _exit(1);
+	    if (!child_pid) {return;}
 
-    if (!child_stopped) {
+		wait_for_regress = 1;
+		step--;
+		if (waitpid(child_pid, &status, 0) < 0) _exit(1);
 
-      /* Once woken up, create a clone of our process. */
+	    // if (read(FORKSRV_FD, &was_killed, 4) != 4) _exit(1);
+	    // if (write(FORKSRV_FD + 1, &child_pid, 4) != 4) _exit(1);
+ 	  	//if (write(FORKSRV_FD + 1, &status, 4) != 4) _exit(1);
+	
+	}
+	else{ // need to regress, just return , let parent read from pipe
+//		if (waitpid(child_pid, &status, is_persistent ? WUNTRACED : 0) < 0) _exit(1);
+//	    if (write(FORKSRV_FD + 1, &child_pid, 4) != 4) _exit(1);
+// 	  	if (write(FORKSRV_FD + 1, &status, 4) != 4) _exit(1);
 
-      child_pid = fork();
-      if (child_pid < 0) _exit(1);
-
-      /* In child process: close fds, resume execution. */
-
-      if (!child_pid) {
-
-        close(FORKSRV_FD);
-        close(FORKSRV_FD + 1);
-        return;
-  
-      }
-
-    } else {
-
-      /* Special handling for persistent mode: if the child is alive but
-         currently stopped, simply restart it with SIGCONT. */
-
-      kill(child_pid, SIGCONT);
-      child_stopped = 0;
-
-    }
-
-    /* In parent process: write PID to pipe, then wait for child. */
-
-    if (write(FORKSRV_FD + 1, &child_pid, 4) != 4) _exit(1);
-
-    if (waitpid(child_pid, &status, is_persistent ? WUNTRACED : 0) < 0)
-      _exit(1);
-
-    /* In persistent mode, the child stops itself with SIGSTOP to indicate
-       a successful run. In this case, we want to wake it up without forking
-       again. */
-
-    if (WIFSTOPPED(status)) child_stopped = 1;
-
-    /* Relay wait status to pipe, then loop back. */
-
-    if (write(FORKSRV_FD + 1, &status, 4) != 4) _exit(1);
+		return;
+	}
 
   }
-
+	close(tmpfd);
 }
 
 
@@ -231,17 +232,17 @@ int __afl_persistent_loop(unsigned int max_cnt) {
 
 void __afl_manual_init(void) {
 
-  static u8 init_done;
-
-  if (!init_done) {
-
-    __afl_map_shm();
-    __afl_start_forkserver();
-    init_done = 1;
-
-  }
-
+	if (!init_count)  __afl_map_shm();
+  	  
+	/*setup fds, close parent fd and create child fd*/
+	init_count++;
+	__afl_start_forkserver();
 }
+	
+	
+	
+	
+
 
 
 /* Proper initialization routine. */

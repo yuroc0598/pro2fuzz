@@ -16,6 +16,8 @@ To create self signed cert use:
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <stdint.h>
+#include <unistd.h>
+#include <fcntl.h>
 #define MAP_SIZE 1 << 16
 typedef uint8_t u8;
 void err(){
@@ -44,14 +46,16 @@ int read_packet(int c,unsigned char* buf){
 int main(int argc, char **argv)
 {
 	int r;
-	u8 c, step;
+	int c, step;
 	unsigned char buf[4096];
 	const char ifi[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/input";
 	char* res_shm= NULL;
+	u8* shmptr;
 	FILE *f;
 	SSL_CTX *sctx, *cctx;
 	SSL *server, *client;
 	BIO *sinbio, *soutbio, *cinbio, *coutbio;
+//	int tmpfd = open("/dev/null",0);
     
 	/*check syntax*/
 	if (argc!=1){
@@ -62,13 +66,10 @@ int main(int argc, char **argv)
 	step = 1; 
 #ifdef __AFL_HAVE_MANUAL_CONTROL
 		res_shm = getenv("__AFL_SHM_ID");
-		if(!res_shm){
-			printf("SHM get failed!\n");
-			return -3;
+		if(res_shm){
+			int shmid = atoi(res_shm);
+			shmptr = shmat(shmid,NULL,0);
 		}
-		int shmid = atoi(res_shm);
-		u8* shmptr = shmat(shmid,NULL,0);
-    	step = shmptr[MAP_SIZE];
 #endif
 
 	SSL_library_init();
@@ -109,7 +110,6 @@ int main(int argc, char **argv)
 	c = 0;
 	do {
 
-		printf("current c is %d\n",c);
 		r = SSL_do_handshake(client);
 		if (r == -1) {
 			if ((SSL_get_error(client, r) != SSL_ERROR_WANT_WRITE)
@@ -126,26 +126,24 @@ int main(int argc, char **argv)
             break;
         }
 		c++;
-
 		write_packet(c,buf,r);
 		if (c == step) {
 
 #ifdef __AFL_HAVE_MANUAL_CONTROL
 			__AFL_INIT();
 #endif
-    		step = shmptr[MAP_SIZE];
-			if(c==step){
-		    f = fopen(ifi, "rb");
-    		r = fread(buf, 1, 4096, f);
-	    	fclose(f);
-			write_packet(c,buf,r);
+
+			step = shmptr[MAP_SIZE];
+	//		write(tmpfd,"%d",step);
+			if(step == c){
+		    	f = fopen(ifi, "rb");
+	    		r = fread(buf, 1, 4096, f);
+		    	fclose(f);
+				write_packet(c,buf,r);
 			}
 			else r = read_packet(c,buf);
 		} 
-        else {
-			r = read_packet(c,buf);
-		
-		}
+        else  r = read_packet(c,buf);
         
         BIO_write(sinbio, buf, r);
 
@@ -166,26 +164,27 @@ int main(int argc, char **argv)
             break;
         }
 		c++;
-
 		write_packet(c,buf,r); // this is what server sends
         
 		if (c == step) {
-        printf("we found step at server\n");
-//#ifdef __AFL_HAVE_MANUAL_CONTROL
-//			__AFL_INIT();
-//#endif
+#ifdef __AFL_HAVE_MANUAL_CONTROL
+			__AFL_INIT();
+#endif
 
-			f = fopen(ifi, "rb");
-			r = fread(buf, 1, 4096, f);
-			fclose(f);
-			write_packet(c,buf,r);
-		} else{
-			 r = read_packet(c,buf);
-		}
+			step = shmptr[MAP_SIZE];
+	//		write(tmpfd,"%d",step);
+			if(step == c){
+				f = fopen(ifi, "rb");
+				r = fread(buf, 1, 4096, f);
+				fclose(f);
+				write_packet(c,buf,r);
+			}
+			else r = read_packet(c,buf);
+		} 
+		else r = read_packet(c,buf);
 
         BIO_write(cinbio, buf, r);
 
-	
 		printf("server state: %s / %s\n", SSL_state_string(server),
 		       SSL_state_string_long(server));
 		printf("client state: %s / %s\n", SSL_state_string(client),
@@ -195,9 +194,10 @@ int main(int argc, char **argv)
     
 #ifdef __AFL_HAVE_MANUAL_CONTROL
 	if(res_shm){
-	shmptr[MAP_SIZE] = c;
+	shmptr[(MAP_SIZE) + 1] = c;
 	shmdt(shmptr);
 	}
 #endif
+//	close(tmpfd);
 	return 0;
 }

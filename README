@@ -28,8 +28,15 @@ Hands on:
 *) we can modidy the LLVM pass, to enable multiple fork. In the pass code, setup the shm first, then read the step value from shm. Everytime the Openssl TP encounters the "__AFL_INIT", it will call forkserver logic. By default, the fs will be initialized when step==1 and init_done is set to 1, fs logic will never be called again. Now, add a condition to enable multi forks. Add a global value to count the times "__AFL_INIT" has occured (init_count), then the condition should be shm[MAP_SIZE] == init_count+1. In this case, at first when fuzzing p1, the fs is up and child is forked. And now fs is in the infinite while loop waiting for another signal, when it comes and shm[MAP_SIZE]==2, it will fork, and encounter the second "__AFL_INIT" in the openssl TP source code, which calls to init fs again, this time, step is 2, and the fs will fork again, setup fds, (parent should close fds). When regressing, the fs will find that init_count > step, so it needs to kill itself and close the fds and send signal to parent (which is the fs forking p1).
 
 
+*) fuzzer will pass -1 to shm if it wants to regress, then TP will receive that and exit with code 321, when its parents, say Q2 sees 321, it will jump out of while loop and continue execute, to let its parents Q1 take control.
 
+*) now use 2 bytes in shm to store c and step
 
+*) timeout when proceed to Q2, when perform dry run: this may caused by the waitpid of forked p1, say, p1 just forked and wait for the child to exit as usual, and p1 already sent the pid of forked p1 to fuzzer, it does not know that this forked p1 will dive into p2. After p2 calls another afl_forkserver, it writes the result of forked p2 to pipe, however, in the fuzzer side, the fuzzer is waiting using waitpid() using the pid of forked p1: we can use init_count together with shm[MAP_SIZE] as a condition in afl_forkserver to stop forked p1 send pid to parent, if(init_count>shm[MAP_SIZE])
+
+*) also need to change read, when fs finds that init_count < step, it should not read from the pipe, instead, let the forked kid read it.
+
+*) still timeout: the problem is that, openssl TP fs1 keeps reading and looping, even if fuzzer says it wants to proceed and put the next Qid in shm, but fs already is earlier than this and already has previous step value in it, there is a race condition. e.g., fs1 read from the shm first, then read from pipe, will keep fuzzing q1: try to use pipe to send the step value
 
 Done:
 
