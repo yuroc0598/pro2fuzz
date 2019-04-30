@@ -98,7 +98,6 @@ static void __afl_start_forkserver(void) {
   static u8 tmp[4];
   s32 child_pid;
 
-  int tmpfd = open("/dev/null",0);
 
   /* Phone home and tell the parent that we're OK. If parent isn't there,
      assume we're not running in forkserver mode and just execute program. */
@@ -167,7 +166,6 @@ static void __afl_start_forkserver(void) {
 	}
 
   }
-	close(tmpfd);
 }
 
 
