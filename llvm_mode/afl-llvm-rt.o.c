@@ -149,7 +149,6 @@ static void __afl_start_forkserver(void) {
 		child_pid = fork();
 	    if (child_pid < 0) _exit(1);
 	    if (!child_pid) {return;}
-
 		wait_for_regress = 1;
 		step--;
 		if (waitpid(child_pid, &status, 0) < 0) _exit(1);
@@ -164,7 +163,7 @@ static void __afl_start_forkserver(void) {
 //	    if (write(FORKSRV_FD + 1, &child_pid, 4) != 4) _exit(1);
 // 	  	if (write(FORKSRV_FD + 1, &status, 4) != 4) _exit(1);
 
-		return;
+		_exit(1);
 	}
 
   }
