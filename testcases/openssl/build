@@ -1,1 +1,1 @@
-AFL_DONT_OPTIMIZE=1  AFL_USE_ASAN=1  ../../afl-clang-fast -o openssl openssl.c libssl.a libcrypto.a -ldl
+AFL_DONT_OPTIMIZE=1  AFL_USE_ASAN=1  ../../afl-clang-fast -g -o openssl openssl.c libssl.a libcrypto.a -ldl

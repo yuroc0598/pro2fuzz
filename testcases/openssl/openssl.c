@@ -130,9 +130,11 @@ int main(int argc, char **argv)
 		if (c == step) {
 
 #ifdef __AFL_HAVE_MANUAL_CONTROL
+			if(res_shm)
 			__AFL_INIT();
 #endif
 
+			if(res_shm)
 			step = shmptr[MAP_SIZE];
 	//		write(tmpfd,"%d",step);
 			if(step == c){
@@ -168,9 +170,11 @@ int main(int argc, char **argv)
         
 		if (c == step) {
 #ifdef __AFL_HAVE_MANUAL_CONTROL
+			if(res_shm)
 			__AFL_INIT();
 #endif
 
+			if(res_shm)
 			step = shmptr[MAP_SIZE];
 	//		write(tmpfd,"%d",step);
 			if(step == c){
