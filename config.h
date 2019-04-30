@@ -31,7 +31,14 @@
 
 /*yurocAdd*/
 
-#define PROCEED_MOD 80
+#define PROCEED_MOD 100
+
+#define PROCEED_BAR \
+  90,\
+  70,\
+  50,\
+  PROCEED_MOD            
+
 #define Q_MAX_CYCLE 1
 #define Q_MAX_PATHS 100
 #define DISABLE_SHOW 0

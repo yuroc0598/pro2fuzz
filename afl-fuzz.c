@@ -361,7 +361,7 @@ double avg_exec_multiQ,
 	   t_byte_ratio_multiQ,
 	   stab_ratio_multiQ;
 
-u8 proceed_bar[4] = {60,50,30,PROCEED_MOD};
+u8 proceed_bar[4] = {PROCEED_BAR};
 u32 num_paths[4]={0,0,0,0};
 
 struct Q
