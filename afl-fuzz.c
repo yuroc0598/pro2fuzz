@@ -7898,7 +7898,7 @@ static void save_cmdline(u32 argc, char** argv) {
 
 void copy_top_rated(struct queue_entry** src, struct queue_entry** dst){
 
-    memcpy(dst,src,MAP_SIZE);
+    memcpy(dst,src,MAP_SIZE*sizeof(struct queue_entry*));
 
 }
 
@@ -7934,6 +7934,7 @@ This is basically the member of struct Q, note that some of them can be directly
 
 
 void free_Q(struct Q* this){
+/*yurocAdd: my own destroy Q, now try to use the destroy_queue
 
 	struct queue_entry* ant = this->Qhead;
 	while(this->Qhead){
@@ -7943,6 +7944,20 @@ void free_Q(struct Q* this){
 	}
 	memset(this->Q_top_rated,0,MAP_SIZE * sizeof(struct queue_entry*));
 	ck_free(this);
+*/
+
+	struct queue_entry* q = this->Qhead;
+	struct queue_entry* n;
+	while (q) {
+    	n = q->next;
+	    ck_free(q->fname);
+	    ck_free(q->trace_mini);
+	    ck_free(q);
+	    q = n;
+	}
+	memset(this->Q_top_rated,0,sizeof(this->Q_top_rated));
+    ck_free(this);
+
 }
 
 
