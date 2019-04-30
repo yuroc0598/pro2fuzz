@@ -20,7 +20,7 @@ PREFIX      ?= /usr/local
 HELPER_PATH  = $(PREFIX)/lib/afl
 BIN_PATH     = $(PREFIX)/bin
 TEST_PATH    = ../testcases/openssl
-TEST_DEP	 = $(TEST_PATH)/openssl.c $(TEST_PATH)/libssl.a $(TEST_PATH)/libcrypto.a
+TEST_DEP	 = $(TEST_PATH)/openssl.c $(TEST_PATH)/libssl.a $(TEST_PATH)/libcrypto.a $(TEST_PATH)/build
 TEST_FLAG    = -ldl
 
 
@@ -98,7 +98,7 @@ endif
 	@$(CC) $(CFLAGS) -m64 -fPIC -c $< -o $@ 2>/dev/null; if [ "$$?" = "0" ]; then echo "success!"; else echo "failed (that's fine)"; fi
 $(TEST_PATH)/openssl: $(TEST_DEP)
 	@printf "build openssl testing program: $(TEST_PATH)/openssl\n" 
-	@AFL_USE_ASAN=1 ../afl-clang-fast -o $@ $^ $(TEST_FLAG)
+	@cd $(TEST_PATH) && ./build
 
 test_build: $(PROGS)
 	@echo "[*] Testing the CC wrapper and instrumentation output..."
@@ -119,3 +119,4 @@ clean:
 	rm -f *.o *.so *~ a.out core core.[1-9][0-9]* test-instr .test-instr0 .test-instr1 
 	rm -f $(PROGS) ../afl-clang-fast++
 	rm -f $(TEST_PATH)/openssl
+	rm -rf $(TEST_PATH)/out/p*/*
