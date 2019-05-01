@@ -130,7 +130,6 @@ int main(int argc, char **argv)
 		if (c == step) {
 
 #ifdef __AFL_HAVE_MANUAL_CONTROL
-			if(res_shm)
 			__AFL_INIT();
 #endif
 
@@ -170,7 +169,6 @@ int main(int argc, char **argv)
         
 		if (c == step) {
 #ifdef __AFL_HAVE_MANUAL_CONTROL
-			if(res_shm)
 			__AFL_INIT();
 #endif
 
