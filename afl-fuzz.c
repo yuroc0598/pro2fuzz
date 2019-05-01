@@ -8186,7 +8186,7 @@ u8 has_new_packet(){
 
 	/*now c_new == c_cur_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
 
-	if(UR(PROCEED_MOD)>proceed_bar[Qid_cur-1] && Qid_cur<c_max){ //yurocTODO: add rand stuff, give a ratio as global,
+	if(Qid_cur<c_max && c_new==c_cur_max && UR(PROCEED_MOD)>proceed_bar[Qid_cur-1]){ //yurocTODO: add rand stuff, give a ratio as global,
 		show_stats();
 		return FAKE_NEW_PACKET;
 	}
