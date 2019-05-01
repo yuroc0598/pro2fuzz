@@ -8164,6 +8164,8 @@ void regress_fuzzing(){
 /*has_new_packet will return 0 if there is no new packet or packet number decreases, 1 if c increases, and update c_cur_max if needed. also, if */
 u8 has_new_packet(){
 
+	if(queue_cycle<MIN_CYCLE_TO_PROCEED) return NO_NEW_PACKET;
+	
 // get c:
     c_new = trace_bits[MAP_SIZE+1];
 
@@ -8574,7 +8576,7 @@ int main(int argc, char** argv) {
 
       queue_cycle++;
 
-	  if(queue_cycle>Q_MAX_CYCLE && Qid_cur>c_min){
+	  if(queue_cycle>MAX_CYCLE_TO_REGRESS && Qid_cur>c_min){
 		regress_fuzzing();
 		continue;
       }

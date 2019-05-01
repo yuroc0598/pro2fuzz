@@ -39,7 +39,8 @@
   50,\
   PROCEED_MOD            
 
-#define Q_MAX_CYCLE 1
+#define MIN_CYCLE_TO_PROCEED 2
+#define MAX_CYCLE_TO_REGRESS 1
 #define Q_MAX_PATHS 100
 #define DISABLE_SHOW 0
 
