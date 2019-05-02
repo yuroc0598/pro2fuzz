@@ -52,10 +52,10 @@
 u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
 __thread u32 __afl_prev_loc;
-u8 init_count=0;
-u8 step = 0;
-u8 fs_init = 0;
-u8 wait_for_regress = 0;
+u8 __init_count=0;
+u8 __step = 0;
+u8 __fs_init = 0;
+u8 __wait_for_regress = 0;
 /* Running in persistent mode? */
 
 static u8 is_persistent;
@@ -94,9 +94,6 @@ static void __afl_map_shm(void) {
 /* Fork server logic. */
 
 static void __afl_start_forkserver(void) {
-
-  static init_count=0;
-  init_count++;
   static u8 tmp[4];
   s32 child_pid;
 
@@ -104,7 +101,7 @@ static void __afl_start_forkserver(void) {
   /* Phone home and tell the parent that we're OK. If parent isn't there,
      assume we're not running in forkserver mode and just execute program. */
 
-  if(init_count == 1){
+  if(__init_count == 1){
 	  if (write(FORKSRV_FD + 1, tmp, 4) != 4) return;
   }
 
@@ -114,26 +111,26 @@ static void __afl_start_forkserver(void) {
 
     u32 was_killed;
     int status;
-	// when fs2 is forked and entered here, step is already read by fs1. error. what we need is to avoid the read in the first while loop
+	// when fs2 is forked and entered here, __step is already read by fs1. error. what we need is to avoid the read in the first while loop
 
 	/* condition for read this shit:
 	 
-	 1) fs1 first time entered, e.g., fs_init == 0
+	 1) fs1 first time entered, e.g., __fs_init == 0
 	 2) proceed: from second time loop, proceed will can this whole function, e.g., looped = 1
 	 3) regress: from second time loop, regress will just ask parent to restart from the loop.
 	 
 	 
 	 */
-	if ((looped || !fs_init) && !wait_for_regress){
-		if (read(FORKSRV_FD, &step,1)!=1) _exit(1); 
-		__afl_area_ptr[MAP_SIZE] = step;
-		fs_init = 1;
+	if ((looped || !__fs_init) && !__wait_for_regress){
+		if (read(FORKSRV_FD, &__step,1)!=1) _exit(1); 
+		__afl_area_ptr[MAP_SIZE] = __step;
+		__fs_init = 1;
 	}
 
 	looped = 1;
-	if (init_count == step){ // when regress, step is still 2
+	if (__init_count == __step){ // when regress, __step is still 2
 
-		wait_for_regress = 0;
+		__wait_for_regress = 0;
 	    if (read(FORKSRV_FD, &was_killed, 4) != 4) _exit(1);
 	    child_pid = fork();
 	    if (child_pid < 0) _exit(1);
@@ -144,14 +141,14 @@ static void __afl_start_forkserver(void) {
 	   	if (write(FORKSRV_FD + 1, &status, 4) != 4) _exit(1);
 		
 	}
-	else if(init_count < step){ // need to proceed, let kid read from pipe
+	else if(__init_count < __step){ // need to proceed, let kid read from pipe
 		// the default fs will read from pipe then execute, which means it will be blocked at read, simply remove the read may cause trouble. but waitpid is blocking, so maybe it's fine.
 		
 		child_pid = fork();
 	    if (child_pid < 0) _exit(1);
 	    if (!child_pid) {return;}
-		wait_for_regress = 1;
-		step--;
+		__wait_for_regress = 1;
+		__step--;
 		if (waitpid(child_pid, &status, 0) < 0) _exit(1);
 
 	    // if (read(FORKSRV_FD, &was_killed, 4) != 4) _exit(1);
@@ -231,9 +228,10 @@ int __afl_persistent_loop(unsigned int max_cnt) {
 
 void __afl_manual_init(void) {
 
-	if (!fs_init)  __afl_map_shm();
+	if (!__fs_init)  __afl_map_shm();
   	  
 	/*setup fds, close parent fd and create child fd*/
+  	++__init_count;
 	__afl_start_forkserver();
 }
 	
@@ -248,11 +246,8 @@ void __afl_manual_init(void) {
 __attribute__((constructor(CONST_PRIO))) void __afl_auto_init(void) {
 
   is_persistent = !!getenv(PERSIST_ENV_VAR);
-
-  if (getenv(DEFER_ENV_VAR)) return;
-
+  if(getenv(DEFER_ENV_VAR)) return ;
   __afl_manual_init();
-
 }
 
 
