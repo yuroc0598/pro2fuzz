@@ -95,6 +95,8 @@ static void __afl_map_shm(void) {
 
 static void __afl_start_forkserver(void) {
 
+  static init_count=0;
+  init_count++;
   static u8 tmp[4];
   s32 child_pid;
 
@@ -229,10 +231,9 @@ int __afl_persistent_loop(unsigned int max_cnt) {
 
 void __afl_manual_init(void) {
 
-	if (!init_count)  __afl_map_shm();
+	if (!fs_init)  __afl_map_shm();
   	  
 	/*setup fds, close parent fd and create child fd*/
-	init_count++;
 	__afl_start_forkserver();
 }
 	
