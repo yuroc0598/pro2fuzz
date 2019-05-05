@@ -4470,8 +4470,12 @@ if(!DISABLE_SHOW){
   fflush(0);
 }
 
-else{
-	printf("cur step: %u, totoal proceed: %d, total regress:%d, queued:%d, cycle:%llu\n",Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle);
+else{ 
+
+	u32 t_bytes = count_non_255_bytes(virgin_bits);
+	double t_byte_ratio = ((double)t_bytes * 100) / MAP_SIZE;
+	printf("cur step: %u, totoal proceed: %d, total regress:%d, queued:%d, cycle:%llu, cov:%0.002f%%\n",Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle,t_byte_ratio);
+
 }
 }
 
