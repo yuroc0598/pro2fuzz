@@ -4474,7 +4474,7 @@ else{
 
 	u32 t_bytes = count_non_255_bytes(virgin_bits);
 	double t_byte_ratio = ((double)t_bytes * 100) / MAP_SIZE;
-	printf("cur step: %u, totoal proceed: %d, total regress:%d, queued:%d, cycle:%llu, cov:%0.002f%%\n",Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle,t_byte_ratio);
+	printf("cur step: %u, totoal proceed: %d, total regress:%d, queued:%d, cycle:%llu, cov:%0.002f%%,uniq crash:%llu, hrs:%llu,mins:%llu\n",Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle,t_byte_ratio,unique_crashes,(get_cur_time()-start_time)/1000/60/60, ((get_cur_time()-start_time)/1000/60)%60);
 
 }
 }
