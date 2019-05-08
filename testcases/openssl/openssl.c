@@ -28,7 +28,7 @@ void err(){
 
 void write_packet(int c,unsigned char* buf,int r){
 	char fname[256];
-	sprintf(fname,"/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p%d/packet",c);
+	sprintf(fname,"/home/yuroc/workspace/protocol/tools/under-dev/pro2fuzz/testcases/openssl/in/p%d/packet",c);
     FILE* f = fopen(fname,"wb");
     fwrite(buf,1,r,f);
 	fclose(f);
@@ -36,7 +36,7 @@ void write_packet(int c,unsigned char* buf,int r){
 
 int read_packet(int c,unsigned char* buf){
 	char fname[256];
-	sprintf(fname,"/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/in/p%d/packet",c);
+	sprintf(fname,"/home/yuroc/workspace/protocol/tools/under-dev/pro2fuzz/testcases/openssl/in/p%d/packet",c);
     FILE* f = fopen(fname,"rb");
     int r = fread(buf,1,4096,f);
 	fclose(f);
@@ -48,7 +48,7 @@ int main(int argc, char **argv)
 	int r;
 	int c, step;
 	unsigned char buf[4096];
-	const char ifi[]="/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/input";
+	const char ifi[]="/home/yuroc/workspace/protocol/tools/under-dev/pro2fuzz/testcases/openssl/input";
 	char* res_shm= NULL;
 	u8* shmptr;
 	FILE *f;
@@ -81,10 +81,10 @@ int main(int argc, char **argv)
 		err();
     
 
-	if (!SSL_CTX_use_certificate_file(sctx, "/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/server.pem", SSL_FILETYPE_PEM))
+	if (!SSL_CTX_use_certificate_file(sctx, "/home/yuroc/workspace/protocol/tools/under-dev/pro2fuzz/testcases/openssl/server.pem", SSL_FILETYPE_PEM))
 		err();
 
-	if (!SSL_CTX_use_PrivateKey_file(sctx, "/home/yuroc/workspace/protocol/tools/pro2fuzz/testcases/openssl/server.key", SSL_FILETYPE_PEM))
+	if (!SSL_CTX_use_PrivateKey_file(sctx, "/home/yuroc/workspace/protocol/tools/under-dev/pro2fuzz/testcases/openssl/server.key", SSL_FILETYPE_PEM))
 		err();
 
 	if (!(server = SSL_new(sctx)))

@@ -34,13 +34,13 @@
 #define PROCEED_MOD 100
 
 #define PROCEED_BAR \
-  90,\
-  70,\
-  50,\
+  95,\
+  85,\
+  75,\
   PROCEED_MOD            
 
-#define MIN_CYCLE_TO_PROCEED 2
-#define MAX_CYCLE_TO_REGRESS 1
+#define MIN_CYCLE_TO_PROCEED 1 // will finish one cycle before proceed
+#define MAX_CYCLE_TO_REGRESS 1 // will finish one cycle then regress
 #define Q_MAX_PATHS 100
 #define DISABLE_SHOW 1
 

@@ -25,8 +25,8 @@ Hands on:
 
 ----------------------------------------------------------------------------------------------------------------------------------
 
-*) save bitmap for every progression and regression
-*) use a global variable to store the last testcase
+*) save bitmap for every progression and regression: use the proceed_times and regress_times for names;
+*) use a global variable to store the last testcase, only update it when progress happens; if doing this, then the TP will need to determine when to read from last packet, still overhead.
 
 
 Done:

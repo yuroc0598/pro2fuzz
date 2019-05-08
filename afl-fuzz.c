@@ -357,6 +357,8 @@ static u8* Qid_str_cur;
 u8 proceed_times,
    regress_times;
 
+u8 proceeds[4]={0,0,0,0};
+u8 regresses[4]={0,0,0,0};
 double avg_exec_multiQ,
 	   t_byte_ratio_multiQ,
 	   stab_ratio_multiQ;
@@ -7897,6 +7899,27 @@ static void save_cmdline(u32 argc, char** argv) {
 
 /*-----------------------------------------start extra funcs for pro2fuzz----------------------------------*/
 
+/*store the bitmpa everytime for progression and regression, so that we can analyze which part of code is explored by which packet*/
+
+void store_bitmap(void) {
+
+  u8* fname;
+  s32 fd;
+
+  fname = alloc_printf("%s/fuzz_bitmap/id_%x_%x_%x", out_dir_raw,Qid_cur,proceed_times,regress_times);
+  fd = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+
+  if (fd < 0) PFATAL("Unable to open '%s'", fname);
+
+  ck_write(fd, virgin_bits, MAP_SIZE, fname);
+
+  close(fd);
+  ck_free(fname);
+
+}
+
+
+
 
 /* copy an array to another, used for top_rated*/
 
@@ -8111,9 +8134,11 @@ void init_Q(){
 /* say we spotted new packets, we want to read the packet that right after the current fuzzing packet and fuzz it in the next round, for now, the testing program will write it to a fixed position, fuzzer can simply read from that position, but make it an argv anyway for future dev*/
 void proceed_fuzzing() { // here don't need Qid, just take the global Qid as current Qid.
 
+	proceeds[Qid_cur-1]++;
+    proceed_times++;
     store_Q();
     Qid_cur++;
-    proceed_times++;
+	store_bitmap();
     set_step();
     multiQ[Qid_cur-1] = constructQ();
     switch_to_Q(Qid_cur-1,Qid_cur);
@@ -8154,9 +8179,11 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
 
-	destroy_Q(Qid_cur);
+	regressess[Qid_cur-1]++;
     regress_times++;
+	destroy_Q(Qid_cur);
     Qid_cur--;
+	store_bitmap();
     set_step();
 	show_stats();
 	switch_to_Q(Qid_cur+1,Qid_cur);
@@ -8189,6 +8216,11 @@ u8 has_new_packet(){
         show_stats();
         return REAL_NEW_PACKET;
     }
+
+
+	/*if progression from this packet is already very high, then do not progress*/
+	if(proceeds[Qid_cur-1]>proceed_bar[Qid_cur-1]) return NO_NEW_PACKET;
+
 
 	/*now c_new == c_cur_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
 

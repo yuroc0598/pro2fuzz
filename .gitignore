@@ -18,3 +18,4 @@ as
 testcases/openssl/in
 testcases/openssl/out
 testcases/openssl/openssl
+testcases/openssl/openssl.c
