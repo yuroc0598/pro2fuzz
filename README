@@ -25,9 +25,8 @@ Hands on:
 
 ----------------------------------------------------------------------------------------------------------------------------------
 
-*) trying to delay the dfs, after (maybe) 1 cycle is done at p1, then pick the toprated to fuzz and dive?
-*) why init_count is 2 when gdb openssl
-
+*) save bitmap for every progression and regression
+*) use a global variable to store the last testcase
 
 
 Done:
