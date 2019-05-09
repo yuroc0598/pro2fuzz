@@ -27,6 +27,7 @@ Hands on:
 
 *) save bitmap for every progression and regression: use the proceed_times and regress_times for names;
 *) use a global variable to store the last testcase, only update it when progress happens; if doing this, then the TP will need to determine when to read from last packet, still overhead.
+*) do we need to clear the extra bitmap explored by p2 when regressing to p1; how to let p1 still explore those cases, we maintain four virgin bits?
 
 
 Done:

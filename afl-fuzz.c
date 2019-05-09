@@ -8179,7 +8179,7 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
 
-	regressess[Qid_cur-1]++;
+	regresses[Qid_cur-1]++;
     regress_times++;
 	destroy_Q(Qid_cur);
     Qid_cur--;
