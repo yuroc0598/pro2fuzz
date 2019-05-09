@@ -16,7 +16,10 @@
 #
 
 
-
+out_dir=$1
+plot_file=$out_dir'/plot_data.trim'
+echo "plot file is " $plot_file
+./trimdata.py $out_dir
 
 (cat <<_EOF_
 set terminal png truecolor enhanced size 1000,300 butt
@@ -37,11 +40,18 @@ set key outside
 
 set autoscale xfixmin
 set autoscale xfixmax
+set style line 1 dashtype 1 lc rgb "cyan" linewidth 3
+set style line 2 dashtype 1 lc rgb "red" linewidth 3
+set style line 3 dashtype 1 lc rgb "orange" linewidth 3
+set style line 4 dashtype 1 lc  rgb "blue" linewidth 3
 
-set terminal png truecolor enhanced size 1000,200 butt
-set output 'cov.png'
+set terminal pdf dashed butt
+set output "$out_dir/cov-trend.pdf"
 
-plot '$1' u 1:2 smooth acsplines title 'Code Coverage' linecolor rgb '#0090ff' linewidth 3
+plot '$plot_file' using 1 title 'p1' smooth bezier ls 1,\\
+	'' using 2 title 'p2' smooth bezier ls 2,\\
+	 ''  using 3 title 'p3' smooth bezier ls 3,\\
+	 ''  using 4 title 'p4' smooth bezier ls 4
 
 _EOF_
 ) | gnuplot 
