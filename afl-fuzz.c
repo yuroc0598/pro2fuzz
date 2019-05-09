@@ -8188,6 +8188,12 @@ void regress_fuzzing(){
 	show_stats();
 	switch_to_Q(Qid_cur+1,Qid_cur);
 	reassign_fds();
+	if(Qid_cur==1 && proceeds[0]==proceed_bar[0] && proceeds[1]==proceed_bar[1] && proceeds[2]==proceed_bar[2]){
+	proceeds[0] = 0;
+	proceeds[1] = 0;
+	proceeds[2] = 0;
+	proceeds[3] = 0;
+	}
 }
 
 
@@ -8219,7 +8225,7 @@ u8 has_new_packet(){
 
 
 	/*if progression from this packet is already very high, then do not progress*/
-	if(proceeds[Qid_cur-1]>proceed_bar[Qid_cur-1]) return NO_NEW_PACKET;
+	if(proceeds[Qid_cur-1] == proceed_bar[Qid_cur-1]) return NO_NEW_PACKET;
 
 
 	/*now c_new == c_cur_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
