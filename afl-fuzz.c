@@ -8188,7 +8188,7 @@ void regress_fuzzing(){
 	show_stats();
 	switch_to_Q(Qid_cur+1,Qid_cur);
 	reassign_fds();
-	if(Qid_cur==1 && proceeds[0]==proceed_bar[0] && proceeds[1]==proceed_bar[1] && proceeds[2]==proceed_bar[2]){
+	if(Qid_cur==1 && proceeds[0]==proceed_bar[0]){
 	proceeds[0] = 0;
 	proceeds[1] = 0;
 	proceeds[2] = 0;
