@@ -1,4 +1,4 @@
-timeout 24h ./afl-fuzz -i testcases/openssl/in -o testcases/openssl/out -m none -f testcases/openssl/input -t 400  -p 1 testcases/openssl/openssl
+cd testcases/openssl && ../../afl-fuzz -i in -o out -m none -f input -t 400  -p 1 ./openssl
 
 
 

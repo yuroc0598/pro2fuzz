@@ -15,4 +15,8 @@ afl-showmap
 afl-tmin
 afl-whatsup
 as
-testcases/openssl/
+testcases/openssl/out
+testcases/openssl/libssl.a
+testcases/openssl/libcrypto.a
+testcases/openssl/input
+testcases/openssl/in
