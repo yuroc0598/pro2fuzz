@@ -328,7 +328,7 @@ enum{
 	/*00*/ NO_NEW_PACKET,
 	/*01*/ REAL_NEW_PACKET,
 	/*02*/ FAKE_NEW_PACKET
-}; // return values of has_new_packet
+}; // return values of has_new_state
 
 enum{
 	/*00*/ NORMAL,
@@ -342,7 +342,7 @@ enum{
 /*declare globals for pro2fuzz*/
 
 
-u8 has_new_packet();
+u8 has_new_state();
 void dump_buf(u8*,u32,u8*);
 void set_step();
 void proceed_fuzzing();
@@ -2688,7 +2688,7 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
 
 	/*I put this here so that the init c can be larger than 0, if something wrong happens, check here*/
 	/*yurocCheck*/
-	//has_new_packet(); 
+	//has_new_state(); 
 
     /* stop_soon is set by the handler for Ctrl+C. When it's pressed,
        we want to bail out quickly. */
@@ -4779,7 +4779,7 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
   }
   /*yuroc: if new packets are seen, then return 2, then in fuzz_one, goto abandon_entry, check if it is 2, if 2, then proceed_fuzzing*/
-  u8 hnp = has_new_packet();
+  u8 hnp = has_new_state();
   if(hnp && Qid_cur<c_max){
     /*maybe do something else for stats
     */
@@ -8198,8 +8198,8 @@ void regress_fuzzing(){
 
 
 
-/*has_new_packet will return 0 if there is no new packet or packet number decreases, 1 if c increases, and update c_cur_max if needed. also, if */
-u8 has_new_packet(){
+/*has_new_state will return 0 if there is no new packet or packet number decreases, 1 if c increases, and update c_cur_max if needed. also, if */
+u8 has_new_state(){
 
 	if(queue_cycle<=MIN_CYCLE_TO_PROCEED) return NO_NEW_PACKET;
 	
