@@ -41,7 +41,7 @@
 
 #define MIN_CYCLE_TO_PROCEED 1 // will finish one cycle before proceed
 #define MAX_CYCLE_TO_REGRESS 1 // will finish one cycle then regress
-#define Q_MAX_PATHS 1000
+#define Q_MAX_PATHS 500
 #define DISABLE_SHOW 1
 
 /* Comment out to disable terminal colors (note that this makes afl-analyze

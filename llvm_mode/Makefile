@@ -19,9 +19,6 @@
 PREFIX      ?= /usr/local
 HELPER_PATH  = $(PREFIX)/lib/afl
 BIN_PATH     = $(PREFIX)/bin
-TEST_PATH    = ../testcases/openssl
-TEST_DEP	 = $(TEST_PATH)/openssl.c $(TEST_PATH)/libssl.a $(TEST_PATH)/libcrypto.a $(TEST_PATH)/build
-TEST_FLAG    = -ldl
 
 
 VERSION     = $(shell grep '^\#define VERSION ' ../config.h | cut -d '"' -f2)
@@ -64,7 +61,7 @@ else
   PROGS      = ../afl-clang-fast ../afl-llvm-rt.o ../afl-llvm-rt-32.o ../afl-llvm-rt-64.o
 endif
 
-all: test_deps $(PROGS) test_build $(TEST_PATH)/openssl  all_done 
+all: test_deps $(PROGS) test_build  all_done 
 
 test_deps:
 ifndef AFL_TRACE_PC
@@ -96,9 +93,6 @@ endif
 ../afl-llvm-rt-64.o: afl-llvm-rt.o.c | test_deps
 	@printf "[*] Building 64-bit variant of the runtime (-m64)... "
 	@$(CC) $(CFLAGS) -m64 -fPIC -c $< -o $@ 2>/dev/null; if [ "$$?" = "0" ]; then echo "success!"; else echo "failed (that's fine)"; fi
-$(TEST_PATH)/openssl: $(TEST_DEP)
-	@printf "build openssl testing program: $(TEST_PATH)/openssl\n" 
-	@cd $(TEST_PATH) && ./build
 
 test_build: $(PROGS)
 	@echo "[*] Testing the CC wrapper and instrumentation output..."
@@ -111,12 +105,10 @@ test_build: $(PROGS)
 
 
 all_done: test_build
-	@echo "[+] All done!'../afl-clang-fast' is ready to use and openssl has been compiled using it!\n"
+	@echo "[+] All done!'../afl-clang-fast' is ready to use!\n"
 
 .NOTPARALLEL: clean
 
 clean:
 	rm -f *.o *.so *~ a.out core core.[1-9][0-9]* test-instr .test-instr0 .test-instr1 
 	rm -f $(PROGS) ../afl-clang-fast++
-	rm -f $(TEST_PATH)/openssl
-	rm -rf $(TEST_PATH)/out/p*/*

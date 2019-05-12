@@ -45,7 +45,7 @@ endif
 
 COMM_HDR    = alloc-inl.h config.h debug.h types.h 
 
-all: test_x86 $(PROGS) afl-as test_build fast all_done
+all: test_x86 $(PROGS) afl-as test_build fast openssl all_done
 
 ifndef AFL_NO_X86
 
@@ -106,6 +106,10 @@ endif
 fast: ./llvm_mode/Makefile
 	@cd ./llvm_mode/ && $(MAKE)
 
+openssl:
+	@cd testcases && $(MAKE)
+
+
 all_done: test_build
 	@if [ ! "`which clang 2>/dev/null`" = "" ]; then echo "[+] LLVM users: see llvm_mode/README.llvm for a faster alternative to afl-gcc."; fi
 	@echo "[+] All done! Be sure to review README - it's pretty short and useful."
@@ -121,6 +125,7 @@ clean:
 	$(MAKE) -C libdislocator clean
 	$(MAKE) -C libtokencap clean
 	cd ./llvm_mode/ && $(MAKE) clean
+	cd testcases && $(MAKE) clean
 
 install: all
 	mkdir -p -m 755 $${DESTDIR}$(BIN_PATH) $${DESTDIR}$(HELPER_PATH) $${DESTDIR}$(DOC_PATH) $${DESTDIR}$(MISC_PATH)
