@@ -5236,7 +5236,6 @@ static u8 fuzz_one(char** argv) {
    * TRIMMING *
    ************/
 
-  /*yurocRemove
   if (!dumb_mode && !queue_cur->trim_done) {
 
     u8 res = trim_case(argv, queue_cur, in_buf);
@@ -5256,9 +5255,7 @@ static u8 fuzz_one(char** argv) {
 
   }
 
- yurocRemove*/
 
-  queue_cur->trim_done = 1;
   memcpy(out_buf, in_buf, len);
 
   /*********************
@@ -8230,7 +8227,7 @@ u8 has_new_state(){
 
 	/*now c_new == c_cur_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
 
-	if(Qid_cur<c_max && c_new==c_cur_max && UR(PROCEED_MOD)>proceed_bar[Qid_cur-1]){ //yurocTODO: add rand stuff, give a ratio as global,
+	if(Qid_cur<c_max && c_new==c_cur_max && UR(PROCEED_MOD)>(160-proceed_bar[Qid_cur-1])){ //yurocTODO: add rand stuff, give a ratio as global,
 		show_stats();
 		return FAKE_NEW_PACKET;
 	}
