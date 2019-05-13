@@ -4795,7 +4795,7 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
 /*yurocRemove*/
 
-  if(queued_paths>Q_MAX_PATHS && Qid_cur>c_min){
+  if(current_entry>Q_MAX_PATHS && Qid_cur>c_min){
   	ret_common_fuzz = EXIT_REGRESS;
 	return EXIT_REGRESS;
   }

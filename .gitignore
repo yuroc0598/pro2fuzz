@@ -20,3 +20,4 @@ testcases/openssl/libssl.a
 testcases/openssl/libcrypto.a
 testcases/openssl/input
 testcases/openssl/in
+testcases/openssl-*
