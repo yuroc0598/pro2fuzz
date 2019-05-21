@@ -8241,7 +8241,7 @@ u8 has_new_state(){
     c_new = trace_bits[MAP_SIZE+1];
 
 // a simple checking
-    if(c_new<c_min || c_new>c_max) PFATAL("current count of packets is out of range!\n");
+    if(c_new<c_min || c_new>c_max) PFATAL("current count of packets %d is out of range!\n",c_new);
 
 	if(c_new < c_cur_max || Qid_cur==c_max) return NO_NEW_PACKET;
 
