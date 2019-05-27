@@ -33,7 +33,7 @@
 
 //#define PROCEED_MOD 100
 #define Q_PROFILE_TIME 600 // in seconds
-#define PROCEED_COE 1.1
+#define PROCEED_COE 2
 
 #define MIN_CYCLE_TO_PROCEED 0 // will finish one cycle before proceed
 #define MAX_CYCLE_TO_REGRESS 1 // will finish one cycle then regress
