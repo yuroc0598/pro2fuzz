@@ -348,16 +348,16 @@ enum{
 }; // different value of PRO2_PHASE
 
 u64 PROCEED_MOD;
-u8 PROFILE_DONE[4]={0,0,0,0};
+u8 PROFILE_DONE[8]={0,0,0,0,0,0,0,0};
+u8 PROFILE_ALL_DONE=0;
 //u64 Q_PROFILE_TIME;
 u8 has_new_state();
 void dump_buf(u8*,u32,u8*);
 void set_step();
 void proceed_fuzzing();
-u8  c_cur_max=1;                  /* c value,  shared with TP          */
 u8  c_new = 1;
-const u8 c_min = 1;
-const u8 c_max = 4;
+u8 c_min = 1;
+u8 c_max = 2;
 
 static u8  ret_common_fuzz=NORMAL;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur=1;
@@ -365,14 +365,14 @@ static u8* Qid_str_cur;
 u8 proceed_times,
    regress_times;
 
-u8 proceeds[4]={0,0,0,0};
-u8 regresses[4]={0,0,0,0};
+u8 proceeds[8]={0,0,0,0,0,0,0,0};
+u8 regresses[8]={0,0,0,0,0,0,0,0};
 double avg_exec_multiQ,
 	   t_byte_ratio_multiQ,
 	   stab_ratio_multiQ;
 
-u64 proceed_bar[4];
-u32 num_paths[4]={0,0,0,0};
+u64 proceed_bar[8];
+u32 num_paths[8]={0,0,0,0,0,0,0,0};
 
 struct Q
 {
@@ -410,8 +410,8 @@ struct queue_entry *Q_top_rated[MAP_SIZE];
 };
 
 
-struct Q* multiQ[4]; // init 8 Qs for now
-struct queue_entry* Q_seeds[4];
+struct Q* multiQ[8]; // init 8 Qs for now
+struct queue_entry* Q_seeds[8];
 
 
 /* ------------------------------------^ end globals for pro2fuzz------------------------------------------*/
@@ -4231,7 +4231,7 @@ if(!DISABLE_SHOW){
 
   SAYF(bV bSTOP "max #packets: " cRST "%x  " bSTG bSTOP "cur #packets: " cRST "%x  " bSTG bSTOP "cur fuzzing: " 
 		  cRST "%x    " bSTG bSTOP"#proceed: " cRST "%x    "bSTG bSTOP "#regress: " cRST "%x" bSTG bV bSTOP"\n", 
-		  c_cur_max,c_new, Qid_cur, proceed_times,regress_times);
+		  c_max,c_new, Qid_cur, proceed_times,regress_times);
 
 
   SAYF(bVR bH bSTOP cCYA " cycle progress " bSTG bH20 bHB bH bSTOP cCYA
@@ -8205,71 +8205,76 @@ void regress_fuzzing(){
 
 
 
-/*has_new_state will return 0 if there is no new packet or packet number decreases, 1 if c increases, and update c_cur_max if needed. also, if */
+/*has_new_state will return 0 if there is no new packet or packet number decreases, 1 if c increases, and update c_max if needed. also, if */
 u8 has_new_state(){
 
-// first do some time for each packet, using Q_PROFILE_TIME (in seconds)
+    c_new = trace_bits[MAP_SIZE+1];
 
-	u64 fuzzed_sec = (get_cur_time() - start_time)/1000;
-	u8 cur_profile_stage = fuzzed_sec/Q_PROFILE_TIME;
-	if(cur_profile_stage == 0) return NO_NEW_PACKET;
-	//	PROFILE_DONE[0] = 1;
-	if(fuzzed_sec < c_max*Q_PROFILE_TIME){ // force proceed
-		if(fuzzed_sec % Q_PROFILE_TIME == 0 && PROFILE_DONE[cur_profile_stage-1]==0) {
-			printf("in has_new_state, secs mod profile time is zero, and Qid_cur is %d, time is %llu\n",Qid_cur,fuzzed_sec);
+	// first do some time for each packet, using Q_PROFILE_TIME (in seconds)
+	if(!PROFILE_ALL_DONE){
+		if(c_new>8) PFATAL("c_new is larger than 8, something is wrong with TP\n");
+		if(c_new>c_max) c_max = c_new;
+		u64 fuzzed_sec = (get_cur_time() - start_time)/1000;
+		u8 cur_profile_stage = fuzzed_sec/Q_PROFILE_TIME;
+		if(cur_profile_stage == 0) return NO_NEW_PACKET;
+		if(fuzzed_sec < c_max*Q_PROFILE_TIME){ // force proceed
+			if(fuzzed_sec % Q_PROFILE_TIME == 0 && PROFILE_DONE[cur_profile_stage-1]==0) {
+				printf("in has_new_state, secs mod profile time is zero, and Qid_cur is %d, time is %llu\n",Qid_cur,fuzzed_sec);
 			PROFILE_DONE[cur_profile_stage-1] = 1;
 			return REAL_NEW_PACKET;
 		}
-		return NO_NEW_PACKET;
+			return NO_NEW_PACKET;
 
-	}	
-	if(fuzzed_sec == c_max*Q_PROFILE_TIME && PROFILE_DONE[c_max-1]==0){ // set probability
-		proceed_bar[0] = multiQ[0]->Qd_paths;
-		proceed_bar[1] = multiQ[1]->Qd_paths;
-		proceed_bar[2] = multiQ[2]->Qd_paths;
-		proceed_bar[3] = queued_paths;
-		u64 m1 = proceed_bar[0] > proceed_bar[1] ? proceed_bar[0]:proceed_bar[1];
-		u64 m2 = proceed_bar[2] > proceed_bar[3] ? proceed_bar[2]:proceed_bar[3];
-		u64 m  = m1>m2?m1:m2;
-		PROCEED_MOD = PROCEED_COE*m; // set the mod to be 1.1 of max
-		PROFILE_DONE[c_max-1] = 1;
-		printf("#####done profiling, bar:%llu, %llu,%llu,%llu, mod:%llu\n",proceed_bar[0],proceed_bar[1],proceed_bar[2],proceed_bar[3],PROCEED_MOD);
+		}	
+		if(fuzzed_sec == c_max*Q_PROFILE_TIME && PROFILE_DONE[c_max-1]==0){ // set probability
+			u64 max_tmp=0;
+			for(int ind=0; ind<c_max-1;ind++){
+				proceed_bar[ind] = multiQ[0]->Qd_paths;
+				if(proceed_bar[ind]>max_tmp) max_tmp = proceed_bar[ind];
+			}
+
+			proceed_bar[c_max-1] = queued_paths;
+			if(proceed_bar[c_max-1] > max_tmp) max_tmp = proceed_bar[c_max-1];
+			PROCEED_MOD = PROCEED_COE*max_tmp; // set the mod to be 1.1 of max
+			PROFILE_DONE[c_max-1] = 1;
+			printf("#####done profiling, bar:%llu, %llu,%llu,%llu,%llu,%llu, mod:%llu\n",proceed_bar[0],proceed_bar[1],proceed_bar[2],proceed_bar[3],proceed_bar[4],proceed_bar[5],PROCEED_MOD);
+			PROFILE_ALL_DONE=1;
+		}
 	}
-	if(queue_cycle<=MIN_CYCLE_TO_PROCEED) return NO_NEW_PACKET;
+
+	else{
+		if(queue_cycle<=MIN_CYCLE_TO_PROCEED) return NO_NEW_PACKET;
 	
-// get c:
-    c_new = trace_bits[MAP_SIZE+1];
 
 // a simple checking
-    if(c_new<c_min || c_new>c_max) PFATAL("current count of packets %d is out of range!\n",c_new);
-
-	if(c_new < c_cur_max || Qid_cur==c_max) return NO_NEW_PACKET;
+	    if(c_new<c_min) PFATAL("current count of packets %d is out of range!\n",c_new);
+		if(c_new < c_max || Qid_cur==c_max) return NO_NEW_PACKET;
 
 // if we are in calibration or trim stage, then do not consider new packets
-	if(strcmp(stage_name,"calibration")==0 || strcmp(stage_name,"trim")==0 || strcmp(stage_name,"init")==0 || c_cur_max==1){
-		if(c_new>c_cur_max) c_cur_max = c_new;
-		return NO_NEW_PACKET;
-	}
+		if(strcmp(stage_name,"calibration")==0 || strcmp(stage_name,"trim")==0 || strcmp(stage_name,"init")==0){
+			if(c_new>c_max) c_max = c_new;
+			return NO_NEW_PACKET;
+		}
 
-    if(c_new > c_cur_max){
-        c_cur_max = c_new;
-        show_stats();
-        return REAL_NEW_PACKET;
-    }
-
+    	if(c_new > c_max){
+        	c_max = c_new;
+	        show_stats();
+    	    return REAL_NEW_PACKET;
+	    }
 
 	/*if progression from this packet is already very high, then do not progress*/
-	if(proceeds[Qid_cur-1] == proceed_bar[Qid_cur-1]) return NO_NEW_PACKET;
+		if(proceeds[Qid_cur-1] == proceed_bar[Qid_cur-1]) return NO_NEW_PACKET;
 
 
-	/*now c_new == c_cur_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
+	/*now c_new == c_max, this would be case mostly, so compared bits now, and do a random proceed, fake new packets*/
 
-	if(Qid_cur<c_max && c_new==c_cur_max && UR(PROCEED_MOD)<proceed_bar[Qid_cur-1]){ //yurocTODO: add rand stuff, give a ratio as global,
-		show_stats();
-		return FAKE_NEW_PACKET;
+		if(Qid_cur<c_max && c_new==c_max && UR(PROCEED_MOD)<proceed_bar[Qid_cur-1]){ //yurocTODO: add rand stuff, give a ratio as global,
+			show_stats();
+			return FAKE_NEW_PACKET;
+		}
 	}
-    show_stats();
-    return 0;
+    	show_stats();
+	    return 0;
 }
 
 /*set the value of step, so that TP can read it and change fuzzing target*/
@@ -8651,7 +8656,7 @@ int main(int argc, char** argv) {
     if (!queue_cur) {
 
       queue_cycle++;
-	  if(Qid_cur==1) c_cur_max = 1; // yurocRethink
+	  if(Qid_cur==1) c_max = 2; // yurocRethink
 
 	  if(queue_cycle>MAX_CYCLE_TO_REGRESS && Qid_cur>c_min){
 		regress_fuzzing();
