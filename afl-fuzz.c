@@ -4486,7 +4486,7 @@ else{
 
 	u32 t_bytes = count_non_255_bytes(virgin_bits);
 	double t_byte_ratio = ((double)t_bytes * 100) / MAP_SIZE;
-	printf("cur step: %u, totoal proceed: %d, total regress:%d, queued:%d, cycle:%llu, cov:%0.002f%%,uniq crash:%llu, hrs:%llu,mins:%llu\n",Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle,t_byte_ratio,unique_crashes,(get_cur_time()-start_time)/1000/60/60, ((get_cur_time()-start_time)/1000/60)%60);
+	printf("c_max:%d, cur step: %u, totoal proceed: %d, total regress:%d, queued:%d, cycle:%llu, cov:%0.002f%%,uniq crash:%llu, hrs:%llu,mins:%llu\n",c_max,Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle,t_byte_ratio,unique_crashes,(get_cur_time()-start_time)/1000/60/60, ((get_cur_time()-start_time)/1000/60)%60);
 
 }
 }
@@ -8141,11 +8141,11 @@ void init_Q(){
 /* say we spotted new packets, we want to read the packet that right after the current fuzzing packet and fuzz it in the next round, for now, the testing program will write it to a fixed position, fuzzer can simply read from that position, but make it an argv anyway for future dev*/
 void proceed_fuzzing() { // here don't need Qid, just take the global Qid as current Qid.
 
+	store_bitmap();
 	proceeds[Qid_cur-1]++;
     proceed_times++;
     store_Q();
     Qid_cur++;
-	store_bitmap();
     set_step();
     multiQ[Qid_cur-1] = constructQ();
     switch_to_Q(Qid_cur-1,Qid_cur);
@@ -8186,11 +8186,11 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
 
+	store_bitmap();
 	regresses[Qid_cur-1]++;
     regress_times++;
 	destroy_Q(Qid_cur);
     Qid_cur--;
-	store_bitmap();
     set_step();
 	show_stats();
 	switch_to_Q(Qid_cur+1,Qid_cur);
