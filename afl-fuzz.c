@@ -362,7 +362,7 @@ u8 c_max = 2;
 static u8  ret_common_fuzz=NORMAL;         /* return value of common_fuzz_stuff, if 2 proceed fuzzing*/
 static u8  Qid_cur=1;
 static u8* Qid_str_cur;
-u8 proceed_times,
+u64 proceed_times,
    regress_times;
 
 u8 proceeds[8]={0,0,0,0,0,0,0,0};
@@ -4230,7 +4230,7 @@ if(!DISABLE_SHOW){
        DTD(cur_ms, last_hang_time), tmp);
 
   SAYF(bV bSTOP "max #packets: " cRST "%x  " bSTG bSTOP "cur #packets: " cRST "%x  " bSTG bSTOP "cur fuzzing: " 
-		  cRST "%x    " bSTG bSTOP"#proceed: " cRST "%x    "bSTG bSTOP "#regress: " cRST "%x" bSTG bV bSTOP"\n", 
+		  cRST "%x    " bSTG bSTOP"#proceed: " cRST "%llu    "bSTG bSTOP "#regress: " cRST "%llu" bSTG bV bSTOP"\n", 
 		  c_max,c_new, Qid_cur, proceed_times,regress_times);
 
 
@@ -4486,7 +4486,7 @@ else{
 
 	u32 t_bytes = count_non_255_bytes(virgin_bits);
 	double t_byte_ratio = ((double)t_bytes * 100) / MAP_SIZE;
-	printf("c_max:%d, cur step: %u, totoal proceed: %d, total regress:%d, queued:%d, cycle:%llu, cov:%0.002f%%,uniq crash:%llu, hrs:%llu,mins:%llu\n",c_max,Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle,t_byte_ratio,unique_crashes,(get_cur_time()-start_time)/1000/60/60, ((get_cur_time()-start_time)/1000/60)%60);
+	printf("c_max:%d, cur step: %u, totoal proceed: %llu, total regress:%llu, queued:%d, cycle:%llu, cov:%0.002f%%,uniq crash:%llu, hrs:%llu,mins:%llu\n",c_max,Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle,t_byte_ratio,unique_crashes,(get_cur_time()-start_time)/1000/60/60, ((get_cur_time()-start_time)/1000/60)%60);
 
 }
 }
@@ -7913,7 +7913,7 @@ void store_bitmap(void) {
   u8* fname;
   s32 fd;
 
-  fname = alloc_printf("%s/fuzz_bitmap/id_%x_%x_%x", out_dir_raw,Qid_cur,proceed_times,regress_times);
+  fname = alloc_printf("%s/fuzz_bitmap/id_%x_%llu_%llu", out_dir_raw,Qid_cur,proceed_times,regress_times);
   fd = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0600);
 
   if (fd < 0) PFATAL("Unable to open '%s'", fname);
