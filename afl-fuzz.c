@@ -3585,30 +3585,39 @@ static void write_stats_file(double bitmap_cvg, double stability, double eps) {
 /* Update the plot file if there is a reason to. */
 
 static void maybe_update_plot_file(double bitmap_cvg, double eps) {
-  if(Qid_cur ==1){
-	  static u32 prev_qp, prev_pf, prev_pnf, prev_ce, prev_md;
-	  static u64 prev_qc, prev_uc, prev_uh;
-	
-	  if (prev_qp == queued_paths && prev_pf == pending_favored && 
-	      prev_pnf == pending_not_fuzzed && prev_ce == current_entry &&
-	      prev_qc == queue_cycle && prev_uc == unique_crashes &&
-	      prev_uh == unique_hangs && prev_md == max_depth) return;
-	
-	  prev_qp  = queued_paths;
-	  prev_pf  = pending_favored;
-	  prev_pnf = pending_not_fuzzed;
-	  prev_ce  = current_entry;
-	  prev_qc  = queue_cycle;
-	  prev_uc  = unique_crashes;
-	  prev_uh  = unique_hangs;
-	  prev_md  = max_depth;
-	
-	  /* Fields in the file:
-	
-	     unix_time, cycles_done, cur_path, paths_total, paths_not_fuzzed,
-	     favored_not_fuzzed, unique_crashes, unique_hangs, max_depth,
-	     execs_per_sec */
-	
+//  if(Qid_cur ==1){
+//	  static u32 prev_qp, prev_pf, prev_pnf, prev_ce, prev_md;
+//	  static u64 prev_qc, prev_uc, prev_uh;
+//	
+//	  if (prev_qp == queued_paths && prev_pf == pending_favored && 
+//	      prev_pnf == pending_not_fuzzed && prev_ce == current_entry &&
+//	      prev_qc == queue_cycle && prev_uc == unique_crashes &&
+//	      prev_uh == unique_hangs && prev_md == max_depth) return;
+//	
+//	  prev_qp  = queued_paths;
+//	  prev_pf  = pending_favored;
+//	  prev_pnf = pending_not_fuzzed;
+//	  prev_ce  = current_entry;
+//	  prev_qc  = queue_cycle;
+//	  prev_uc  = unique_crashes;
+//	  prev_uh  = unique_hangs;
+//	  prev_md  = max_depth;
+//	
+//	  /* Fields in the file:
+//	
+//	     unix_time, cycles_done, cur_path, paths_total, paths_not_fuzzed,
+//	     favored_not_fuzzed, unique_crashes, unique_hangs, max_depth,
+//	     execs_per_sec */
+//	
+//	  fprintf(plot_file, 
+//	          "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %llu, %u, %0.02f\n",
+//	          get_cur_time() / 1000, queue_cycle - 1, current_entry, queued_paths,
+//	          pending_not_fuzzed, pending_favored, bitmap_cvg, unique_crashes,
+//	          unique_hangs, max_depth, eps); /* ignore errors */
+//	
+//	  fflush(plot_file);
+//  }
+//
 	  fprintf(plot_file, 
 	          "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %llu, %u, %0.02f\n",
 	          get_cur_time() / 1000, queue_cycle - 1, current_entry, queued_paths,
@@ -3616,7 +3625,6 @@ static void maybe_update_plot_file(double bitmap_cvg, double eps) {
 	          unique_hangs, max_depth, eps); /* ignore errors */
 	
 	  fflush(plot_file);
-  }
 
 }
 
@@ -4488,6 +4496,15 @@ else{
 
 	u32 t_bytes = count_non_255_bytes(virgin_bits);
 	double t_byte_ratio = ((double)t_bytes * 100) / MAP_SIZE;
+
+	u64 cur_ms = get_cur_time();
+	static u64 last_plot_ms=0;
+
+  	if (cur_ms - last_plot_ms > PLOT_UPDATE_SEC * 1000) {
+    	last_plot_ms = cur_ms;
+    	maybe_update_plot_file(t_byte_ratio, 0);
+  }
+
 	printf("c_max:%d, cur step: %u, totoal proceed: %llu, total regress:%llu, queued:%d, cycle:%llu, cov:%0.002f%%,uniq crash:%llu, hrs:%llu,mins:%llu\n",c_max,Qid_cur,proceed_times,regress_times,queued_paths,queue_cycle,t_byte_ratio,unique_crashes,(get_cur_time()-start_time)/1000/60/60, ((get_cur_time()-start_time)/1000/60)%60);
 
 }
