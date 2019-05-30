@@ -412,8 +412,8 @@ struct queue_entry *Q_top_rated[MAP_SIZE];
 
 struct Q* multiQ[8]; // init 8 Qs for now
 struct queue_entry* Q_seeds[8];
-
-
+u64 bitmap_id=0;
+void store_bitmap();
 /* ------------------------------------^ end globals for pro2fuzz------------------------------------------*/
 
 /* Get unix time in milliseconds */
@@ -2715,6 +2715,8 @@ static u8 calibrate_case(char** argv, struct queue_entry* q, u8* use_mem,
     if (q->exec_cksum != cksum) {
 
       u8 hnb = has_new_bits(virgin_bits);
+	  //yurocAdd
+	  if(hnb>0) store_bitmap();
       if (hnb > new_bits) new_bits = hnb;
 
       if (q->exec_cksum) {
@@ -4748,7 +4750,7 @@ abort_trimming:
 EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
   u8 fault;
-
+  u8 res;
   if (post_handler) {
 
     out_buf = post_handler(out_buf, &len);
@@ -4794,7 +4796,10 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
     /*maybe do something else for stats
     */
 	if(hnp == REAL_NEW_PACKET) queue_cur->invoke_new_packet = 1;
-    queued_discovered += save_if_interesting(argv, out_buf, len, fault);
+
+	res = save_if_interesting(argv, out_buf, len, fault);
+	if(res) store_bitmap();
+    queued_discovered += res;
 
     if (!(stage_cur % stats_update_freq) || stage_cur + 1 == stage_max)
       show_stats();
@@ -4813,7 +4818,9 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
 
   /* This handles FAULT_ERROR for us: */
 
-  queued_discovered += save_if_interesting(argv, out_buf, len, fault);
+  res = save_if_interesting(argv, out_buf, len, fault);
+  if(res) store_bitmap();
+  queued_discovered += res;
 
   if (!(stage_cur % stats_update_freq) || stage_cur + 1 == stage_max)
     show_stats();
@@ -7912,17 +7919,14 @@ void store_bitmap(void) {
 
   u8* fname;
   s32 fd;
-
-  fname = alloc_printf("%s/fuzz_bitmap/id_%x_%llu_%llu", out_dir_raw,Qid_cur,proceed_times,regress_times);
+  u64 duration = get_cur_time()-start_time;
+  fname = alloc_printf("%s/fuzz_bitmap/%llu_%x_%llu_%llu_%llu", out_dir_raw,bitmap_id,Qid_cur,proceed_times,regress_times,duration);
+  bitmap_id++;
   fd = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-
   if (fd < 0) PFATAL("Unable to open '%s'", fname);
-
   ck_write(fd, virgin_bits, MAP_SIZE, fname);
-
   close(fd);
   ck_free(fname);
-
 }
 
 
@@ -8141,7 +8145,6 @@ void init_Q(){
 /* say we spotted new packets, we want to read the packet that right after the current fuzzing packet and fuzz it in the next round, for now, the testing program will write it to a fixed position, fuzzer can simply read from that position, but make it an argv anyway for future dev*/
 void proceed_fuzzing() { // here don't need Qid, just take the global Qid as current Qid.
 
-	store_bitmap();
 	proceeds[Qid_cur-1]++;
     proceed_times++;
     store_Q();
@@ -8186,7 +8189,6 @@ void proceed_fuzzing() { // here don't need Qid, just take the global Qid as cur
 /*this is used when Q2 finish 2 rounds, then we need to go back to Q1, maybe destroy Q2 since we are doing dfs*/
 void regress_fuzzing(){
 
-	store_bitmap();
 	regresses[Qid_cur-1]++;
     regress_times++;
 	destroy_Q(Qid_cur);
